@@ -1,0 +1,47 @@
+using Binance.Net.Clients;
+using CryptoExchange.Net.Authentication;
+using Markov.Core.Interfaces;
+using Markov.Core.Models;
+using Microsoft.Extensions.Options;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace Markov.Core.Services;
+
+public class BinanceDataFetcher : ICryptoDataFetcher
+{
+    private readonly BinanceRestClient _client;
+
+    public BinanceDataFetcher(IOptions<BinanceSettings> settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings.Value.ApiKey) || string.IsNullOrWhiteSpace(settings.Value.ApiSecret))
+        {
+            throw new ArgumentException("Binance API key and secret must be configured.");
+        }
+
+        _client = new BinanceRestClient(options =>
+        {
+            options.ApiCredentials = new ApiCredentials(settings.Value.ApiKey, settings.Value.ApiSecret);
+        });
+    }
+
+    public async Task<Asset> FetchDataAsync(string assetName, DateTime from, DateTime to)
+    {
+        var klines = await _client.SpotApi.ExchangeData.GetKlinesAsync(assetName, Binance.Net.Enums.KlineInterval.OneDay, from, to);
+
+        var candles = klines.Data
+            .Select(k => new Candle
+            {
+                Timestamp = k.OpenTime,
+                Movement = k.ClosePrice > k.OpenPrice ? Movement.Up : Movement.Down
+            })
+            .ToList();
+
+        return new Asset
+        {
+            Name = assetName,
+            HistoricalData = candles
+        };
+    }
+}
