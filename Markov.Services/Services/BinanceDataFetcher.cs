@@ -30,14 +30,22 @@ public class BinanceDataFetcher : ICryptoDataFetcher
             .Select(k => new Candle
             {
                 Timestamp = k.OpenTime,
-                Movement = k.ClosePrice > k.OpenPrice ? Movement.Up : Movement.Down
+                Movement = k.ClosePrice > k.OpenPrice ? Movement.Up : Movement.Down,
+                Open = k.OpenPrice,
+                Close = k.ClosePrice,
+                High = k.HighPrice,
+                Low = k.LowPrice,
+                TradeCount = k.TradeCount,
+                Volume = k.Volume
             })
             .ToList();
 
         return new Asset
         {
             Name = assetName,
-            HistoricalData = candles
+            HistoricalData = candles,
+            Source = nameof(BinanceDataFetcher),
+            AssetType = AssetType.Crypto
         };
     }
 }

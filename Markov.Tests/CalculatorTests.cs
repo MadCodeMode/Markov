@@ -21,7 +21,8 @@ public class CalculatorTests
                 new() { Movement = Movement.Up },
                 new() { Movement = Movement.Down },
                 new() { Movement = Movement.Up },
-            }
+            },
+            Source = "Test"
         };
         var pattern = new[] { Movement.Up, Movement.Down };
 
@@ -48,7 +49,8 @@ public class CalculatorTests
                 new() { Movement = Movement.Up },
                 new() { Movement = Movement.Up },
                 new() { Movement = Movement.Up },
-            }
+            },
+            Source = "Test"
         };
         var consecutiveMovements = 2;
 

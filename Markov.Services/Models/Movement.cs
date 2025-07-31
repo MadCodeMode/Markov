@@ -5,3 +5,12 @@ public enum Movement
     Up,
     Down
 }
+
+public enum AssetType
+{
+    Crypto,
+    Stock,
+    Gold,
+    Bonds,
+    Realestate
+}

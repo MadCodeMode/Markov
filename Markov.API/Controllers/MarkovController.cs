@@ -38,14 +38,9 @@ namespace Markov.API.Controllers
         }
 
         [HttpPost("fetch-crypto/{assetName}")]
-        public async Task<IActionResult> FetchCryptoData(string assetName)
+        public async Task<IActionResult> FetchCryptoData(string assetName, DateTime startDate, DateTime? endDate = null)
         {
-            var from = new DateTime(2020, 1, 1);
-            var to = DateTime.Now;
-
-            var asset = await _cryptoDataFetcher.FetchDataAsync(assetName, from, to);
-            
-            _logger.LogInformation(string.Join('\n', asset));
+            var asset = await _cryptoDataFetcher.FetchDataAsync(assetName, startDate, endDate ?? DateTime.Now);
 
             await _dataRepository.SaveAssetAsync(asset);
 
@@ -61,7 +56,7 @@ namespace Markov.API.Controllers
                 return NotFound($"Asset {assetName} not found.");
             }
 
-            var pattern = patternString.Split(',').Select(s => Enum.Parse<Movement>(s)).ToArray();
+            var pattern = patternString.Split(',').Select(Enum.Parse<Movement>).ToArray();
 
             var probability = _markovChainCalculator.CalculateNextMovementProbability(asset, pattern);
 
