@@ -6,6 +6,7 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__DefaultConnection=Server=db;Database=master;User Id=sa;Password=${DB_PASSWORD};TrustServerCertificate=True
       - Binance__ApiKey=${BINANCE_API_KEY}
