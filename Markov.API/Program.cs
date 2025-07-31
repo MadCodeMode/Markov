@@ -1,6 +1,7 @@
 using HealthChecks.UI.Client;
 using Markov.Services.Interfaces;
 using Markov.Services.Models;
+using Markov.Services.Repositories; // Assuming this namespace
 using Markov.Services.Services;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
@@ -12,16 +13,14 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks()
     .AddSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 
-//// Add services to the container.
+// Add services to the container.
 builder.Services.Configure<BinanceSettings>(builder.Configuration.GetSection("Binance"));
 builder.Services.AddTransient<ICryptoDataFetcher, BinanceDataFetcher>();
+builder.Services.AddTransient<IDataRepository, DataRepository>(); // Added this line
 builder.Services.AddTransient<IMarkovChainCalculator, MarkovChainCalculator>();
 builder.Services.AddTransient<IReversalCalculator, ReversalCalculator>();
 
-//builder.Services.AddControllers();
-//// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-//builder.Services.AddEndpointsApiExplorer();
-//builder.Services.AddSwaggerGen();
+builder.Services.AddControllers(); // Uncommented this line
 
 var app = builder.Build();
 
@@ -33,6 +32,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.MapControllers(); // Added this line
 
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
