@@ -11,6 +11,8 @@ public class ReversalCalculator : IReversalCalculator
         var upReversals = 0;
         var downOccurrences = 0;
         var downReversals = 0;
+        var upReversalDates = new List<DateTime>();
+        var downReversalDates = new List<DateTime>();
 
         if (consecutiveMovements > 0)
         {
@@ -32,6 +34,7 @@ public class ReversalCalculator : IReversalCalculator
                     if (asset.HistoricalData[i + consecutiveMovements].Movement == Movement.Down)
                     {
                         upReversals++;
+                        upReversalDates.Add(asset.HistoricalData[i + consecutiveMovements].Timestamp);
                     }
                 }
 
@@ -51,6 +54,7 @@ public class ReversalCalculator : IReversalCalculator
                     if (asset.HistoricalData[i + consecutiveMovements].Movement == Movement.Up)
                     {
                         downReversals++;
+                        downReversalDates.Add(asset.HistoricalData[i + consecutiveMovements].Timestamp);
                     }
                 }
             }
@@ -62,7 +66,9 @@ public class ReversalCalculator : IReversalCalculator
         return new ReversalProbability
         {
             UpReversalPercentage = upReversalPercentage,
-            DownReversalPercentage = downReversalPercentage
+            DownReversalPercentage = downReversalPercentage,
+            UpReversalDates = upReversalDates,
+            DownReversalDates = downReversalDates
         };
     }
 }

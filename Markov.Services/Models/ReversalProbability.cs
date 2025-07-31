@@ -4,5 +4,7 @@ namespace Markov.Services.Models
     {
         public double UpReversalPercentage { get; set; }
         public double DownReversalPercentage { get; set; }
+        public List<DateTime> UpReversalDates { get; set; } = new();
+        public List<DateTime> DownReversalDates { get; set; } = new();
     }
 }
