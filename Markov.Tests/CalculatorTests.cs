@@ -1,6 +1,5 @@
-using Markov.Core.Models;
-using Markov.Core.Services;
-using Xunit;
+using Markov.Services.Models;
+using Markov.Services.Services;
 
 namespace Markov.Tests;
 

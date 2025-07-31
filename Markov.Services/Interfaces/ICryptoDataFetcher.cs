@@ -1,8 +1,8 @@
-using Markov.Core.Models;
+using Markov.Services.Models;
 using System;
 using System.Threading.Tasks;
 
-namespace Markov.Core.Interfaces;
+namespace Markov.Services.Interfaces;
 
 public interface ICryptoDataFetcher
 {

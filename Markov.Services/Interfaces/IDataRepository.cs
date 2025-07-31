@@ -1,9 +1,10 @@
-using Markov.Core.Models;
+using Markov.Services.Models;
 
-namespace Markov.Core.Interfaces;
+namespace Markov.Services.Interfaces;
 
 public interface IDataRepository
 {
     Task<Asset> GetAssetAsync(string assetName);
+    Task<IEnumerable<Asset>> GetAllAssetsAsync();
     Task SaveAssetAsync(Asset asset);
 }

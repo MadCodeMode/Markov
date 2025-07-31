@@ -1,4 +1,4 @@
-namespace Markov.Core.Models;
+namespace Markov.Services.Models;
 
 public enum Movement
 {

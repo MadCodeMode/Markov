@@ -1,7 +1,7 @@
-using Markov.Core.Interfaces;
-using Markov.Core.Models;
+using Markov.Services.Interfaces;
+using Markov.Services.Models;
 
-namespace Markov.Core.Services;
+namespace Markov.Services.Services;
 
 public class ReversalCalculator : IReversalCalculator
 {

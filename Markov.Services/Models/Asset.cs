@@ -1,4 +1,5 @@
-namespace Markov.Core.Models;
+
+namespace Markov.Services.Models;
 
 public class Asset
 {

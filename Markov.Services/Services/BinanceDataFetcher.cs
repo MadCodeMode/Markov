@@ -1,18 +1,14 @@
 using Binance.Net.Clients;
 using CryptoExchange.Net.Authentication;
-using Markov.Core.Interfaces;
-using Markov.Core.Models;
+using Markov.Services.Interfaces;
+using Markov.Services.Models;
 using Microsoft.Extensions.Options;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 
-namespace Markov.Core.Services;
+namespace Markov.Services.Services;
 
 public class BinanceDataFetcher : ICryptoDataFetcher
 {
     private readonly BinanceRestClient _client;
-
     public BinanceDataFetcher(IOptions<BinanceSettings> settings)
     {
         if (string.IsNullOrWhiteSpace(settings.Value.ApiKey) || string.IsNullOrWhiteSpace(settings.Value.ApiSecret))
