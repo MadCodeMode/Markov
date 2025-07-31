@@ -1,5 +1,6 @@
 using Markov.Services.Interfaces;
 using Markov.Services.Models;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -7,22 +8,31 @@ namespace Markov.Services.Repositories
 {
     public class DataRepository : IDataRepository
     {
-        public Task<Asset> GetAssetAsync(string assetName)
+        private readonly MarkovDbContext _context;
+
+        public DataRepository(MarkovDbContext context)
         {
-            // TODO: Implement the logic to get an asset from the database
-            return Task.FromResult<Asset>(null);
+            _context = context;
         }
 
-        public Task<IEnumerable<Asset>> GetAllAssetsAsync()
+        public async Task<Asset> GetAssetAsync(string assetName)
         {
-            // Return an empty list for now
-            return Task.FromResult<IEnumerable<Asset>>(new List<Asset>());
+            return await _context.Assets
+                .Include(a => a.HistoricalData)
+                .FirstOrDefaultAsync(a => a.Name == assetName);
         }
 
-        public Task SaveAssetAsync(Asset asset)
+        public async Task<IEnumerable<Asset>> GetAllAssetsAsync()
         {
-            // TODO: Implement the logic to save an asset to the database
-            return Task.CompletedTask;
+            return await _context.Assets
+                .Include(a => a.HistoricalData)
+                .ToListAsync();
+        }
+
+        public async Task SaveAssetAsync(Asset asset)
+        {
+            _context.Assets.Add(asset);
+            await _context.SaveChangesAsync();
         }
     }
 }

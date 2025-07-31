@@ -12,23 +12,28 @@ namespace Markov.API.Controllers
         private readonly IDataRepository _dataRepository;
         private readonly IMarkovChainCalculator _markovChainCalculator;
         private readonly IReversalCalculator _reversalCalculator;
+        private readonly ILogger<MarkovController> _logger;
 
         public MarkovController(
             ICryptoDataFetcher cryptoDataFetcher,
             IDataRepository dataRepository,
             IMarkovChainCalculator markovChainCalculator,
-            IReversalCalculator reversalCalculator)
+            IReversalCalculator reversalCalculator,
+            ILogger<MarkovController> logger)
         {
             _cryptoDataFetcher = cryptoDataFetcher;
             _dataRepository = dataRepository;
             _markovChainCalculator = markovChainCalculator;
             _reversalCalculator = reversalCalculator;
+            _logger = logger;
         }
 
         [HttpGet("assets")]
         public async Task<IActionResult> GetSavedData()
         {
             var assets = await _dataRepository.GetAllAssetsAsync();
+            _logger.LogInformation(string.Join('\n', assets));
+
             return Ok(assets);
         }
 
@@ -39,6 +44,9 @@ namespace Markov.API.Controllers
             var to = DateTime.Now;
 
             var asset = await _cryptoDataFetcher.FetchDataAsync(assetName, from, to);
+            
+            _logger.LogInformation(string.Join('\n', asset));
+
             await _dataRepository.SaveAssetAsync(asset);
 
             return Ok($"Crypto data for {assetName} fetched and saved successfully.");

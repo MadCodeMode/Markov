@@ -3,6 +3,7 @@ namespace Markov.Services.Models;
 
 public class Asset
 {
+    public int Id { get; set; }
     public required string Name { get; set; }
     public required List<Candle> HistoricalData { get; set; }
 }

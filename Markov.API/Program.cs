@@ -1,11 +1,16 @@
 using HealthChecks.UI.Client;
+using Markov.Services;
 using Markov.Services.Interfaces;
 using Markov.Services.Models;
 using Markov.Services.Repositories; // Assuming this namespace
 using Markov.Services.Services;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDbContext<MarkovDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
