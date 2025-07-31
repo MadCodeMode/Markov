@@ -6,5 +6,5 @@ public interface IDataRepository
 {
     Task<Asset> GetAssetAsync(string assetName);
     Task<IEnumerable<Asset>> GetAllAssetsAsync();
-    Task SaveAssetAsync(Asset asset);
+    Task UpsertAssetAsync(Asset asset);
 }

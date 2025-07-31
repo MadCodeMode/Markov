@@ -58,6 +58,7 @@ public class CalculatorTests
         var probability = calculator.CalculateReversalProbability(asset, consecutiveMovements);
 
         // Assert
-        Assert.Equal(0.5, probability, 5);
+        Assert.Equal(0.5, probability.UpReversalPercentage, 5);
+        Assert.Equal(0.5, probability.DownReversalPercentage, 5);
     }
 }

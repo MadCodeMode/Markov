@@ -4,5 +4,5 @@ namespace Markov.Services.Interfaces;
 
 public interface IReversalCalculator
 {
-    double CalculateReversalProbability(Asset asset, int consecutiveMovements);
+    ReversalProbability CalculateReversalProbability(Asset asset, int consecutiveMovements);
 }

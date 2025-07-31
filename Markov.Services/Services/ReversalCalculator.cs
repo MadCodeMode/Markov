@@ -5,59 +5,64 @@ namespace Markov.Services.Services;
 
 public class ReversalCalculator : IReversalCalculator
 {
-    public double CalculateReversalProbability(Asset asset, int consecutiveMovements)
+    public ReversalProbability CalculateReversalProbability(Asset asset, int consecutiveMovements)
     {
-        // This is the core logic for the reversal probability calculation.
-        // We need to find all occurrences of n consecutive 'Up' or 'Down' movements
-        // and then count how many times a reversal follows.
-
-        var totalOccurrences = 0;
-        var totalReversals = 0;
+        var upOccurrences = 0;
+        var upReversals = 0;
+        var downOccurrences = 0;
+        var downReversals = 0;
 
         if (consecutiveMovements > 0)
         {
             for (var i = 0; i < asset.HistoricalData.Count - consecutiveMovements; i++)
             {
                 var isUpSequence = true;
-                var isDownSequence = true;
-
                 for (var j = 0; j < consecutiveMovements; j++)
                 {
                     if (asset.HistoricalData[i + j].Movement != Movement.Up)
                     {
                         isUpSequence = false;
-                    }
-                    if (asset.HistoricalData[i + j].Movement != Movement.Down)
-                    {
-                        isDownSequence = false;
+                        break;
                     }
                 }
 
                 if (isUpSequence)
                 {
-                    totalOccurrences++;
+                    upOccurrences++;
                     if (asset.HistoricalData[i + consecutiveMovements].Movement == Movement.Down)
                     {
-                        totalReversals++;
+                        upReversals++;
+                    }
+                }
+
+                var isDownSequence = true;
+                for (var j = 0; j < consecutiveMovements; j++)
+                {
+                    if (asset.HistoricalData[i + j].Movement != Movement.Down)
+                    {
+                        isDownSequence = false;
+                        break;
                     }
                 }
 
                 if (isDownSequence)
                 {
-                    totalOccurrences++;
+                    downOccurrences++;
                     if (asset.HistoricalData[i + consecutiveMovements].Movement == Movement.Up)
                     {
-                        totalReversals++;
+                        downReversals++;
                     }
                 }
             }
         }
 
-        if (totalOccurrences == 0)
-        {
-            return 0.5; // If the pattern is not found, we assume a 50% probability for reversal.
-        }
+        var upReversalPercentage = upOccurrences == 0 ? 0.5 : (double)upReversals / upOccurrences;
+        var downReversalPercentage = downOccurrences == 0 ? 0.5 : (double)downReversals / downOccurrences;
 
-        return (double)totalReversals / totalOccurrences;
+        return new ReversalProbability
+        {
+            UpReversalPercentage = upReversalPercentage,
+            DownReversalPercentage = downReversalPercentage
+        };
     }
 }

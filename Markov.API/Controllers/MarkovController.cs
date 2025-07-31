@@ -38,11 +38,11 @@ namespace Markov.API.Controllers
         }
 
         [HttpPost("fetch-crypto/{assetName}")]
-        public async Task<IActionResult> FetchCryptoData(string assetName, DateTime startDate, DateTime? endDate = null)
+        public async Task<IActionResult> FetchCryptoData(string assetName, [FromQuery] DateTime startDate, [FromQuery] DateTime? endDate = null)
         {
             var asset = await _cryptoDataFetcher.FetchDataAsync(assetName, startDate, endDate ?? DateTime.Now);
 
-            await _dataRepository.SaveAssetAsync(asset);
+            await _dataRepository.UpsertAssetAsync(asset);
 
             return Ok($"Crypto data for {assetName} fetched and saved successfully.");
         }
@@ -72,9 +72,9 @@ namespace Markov.API.Controllers
                 return NotFound($"Asset {assetName} not found.");
             }
 
-            var probability = _reversalCalculator.CalculateReversalProbability(asset, consecutiveMovements);
+            var probabilities = _reversalCalculator.CalculateReversalProbability(asset, consecutiveMovements);
 
-            return Ok($"Probability of reversal for {assetName} after {consecutiveMovements} consecutive movements: {probability:P}");
+            return Ok(probabilities);
         }
     }
 }
