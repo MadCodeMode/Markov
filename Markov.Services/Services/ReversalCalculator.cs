@@ -7,61 +7,69 @@ public class ReversalCalculator : IReversalCalculator
 {
     public ReversalProbability CalculateReversalProbability(Asset asset, int consecutiveMovements)
     {
-        var upOccurrences = 0;
-        var upReversals = 0;
-        var downOccurrences = 0;
-        var downReversals = 0;
+        var upCount = 0;
+        var upReversalCount = 0;
+        var downCount = 0;
+        var downReversalCount = 0;
         var upReversalDates = new List<DateTime>();
         var downReversalDates = new List<DateTime>();
 
-        if (consecutiveMovements > 0)
+        if (consecutiveMovements <= 0)
         {
-            for (var i = 0; i < asset.HistoricalData.Count - consecutiveMovements; i++)
+            return new ReversalProbability
             {
-                var isUpSequence = true;
-                for (var j = 0; j < consecutiveMovements; j++)
-                {
-                    if (asset.HistoricalData[i + j].Movement != Movement.Up)
-                    {
-                        isUpSequence = false;
-                        break;
-                    }
-                }
+                UpReversalPercentage = 0,
+                DownReversalPercentage = 0,
+                UpReversalDates = upReversalDates,
+                DownReversalDates = downReversalDates
+            };
+        }
 
-                if (isUpSequence)
-                {
-                    upOccurrences++;
-                    if (asset.HistoricalData[i + consecutiveMovements].Movement == Movement.Down)
-                    {
-                        upReversals++;
-                        upReversalDates.Add(asset.HistoricalData[i + consecutiveMovements].Timestamp);
-                    }
-                }
+        var data = asset.HistoricalData;
+        var count = data.Count;
+        var i = 0;
 
-                var isDownSequence = true;
-                for (var j = 0; j < consecutiveMovements; j++)
-                {
-                    if (asset.HistoricalData[i + j].Movement != Movement.Down)
-                    {
-                        isDownSequence = false;
-                        break;
-                    }
-                }
+        while (i <= count - consecutiveMovements - 1)
+        {
+            var firstMovement = data[i].Movement;
+            var sequenceFound = true;
 
-                if (isDownSequence)
+            for (var j = 1; j < consecutiveMovements; j++)
+            {
+                if (data[i + j].Movement != firstMovement)
                 {
-                    downOccurrences++;
-                    if (asset.HistoricalData[i + consecutiveMovements].Movement == Movement.Up)
+                    sequenceFound = false;
+                    i += j;
+                    break;
+                }
+            }
+
+            if (sequenceFound)
+            {
+                if (firstMovement == Movement.Up)
+                {
+                    upCount++;
+                    if (i + consecutiveMovements < count && data[i + consecutiveMovements].Movement == Movement.Down)
                     {
-                        downReversals++;
-                        downReversalDates.Add(asset.HistoricalData[i + consecutiveMovements].Timestamp);
+                        upReversalCount++;
+                        upReversalDates.Add(data[i + consecutiveMovements].Timestamp);
                     }
                 }
+                else if (firstMovement == Movement.Down)
+                {
+                    downCount++;
+                    if (i + consecutiveMovements < count && data[i + consecutiveMovements].Movement == Movement.Up)
+                    {
+                        downReversalCount++;
+                        downReversalDates.Add(data[i + consecutiveMovements].Timestamp);
+                    }
+                }
+                i += consecutiveMovements;
             }
         }
 
-        var upReversalPercentage = upOccurrences == 0 ? 0.5 : (double)upReversals / upOccurrences;
-        var downReversalPercentage = downOccurrences == 0 ? 0.5 : (double)downReversals / downOccurrences;
+        var upReversalPercentage = upCount == 0 ? 0 : (double)upReversalCount / upCount;
+        var downReversalPercentage = downCount == 0 ? 0 : (double)downReversalCount / downCount;
 
         return new ReversalProbability
         {
