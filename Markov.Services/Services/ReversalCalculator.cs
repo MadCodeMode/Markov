@@ -11,8 +11,10 @@ public class ReversalCalculator : IReversalCalculator
         var upReversalCount = 0;
         var downCount = 0;
         var downReversalCount = 0;
-        var upReversalDates = new List<DateTime>();
-        var downReversalDates = new List<DateTime>();
+        var upReversalData = new List<ReversalDataPoint>();
+        var downReversalData = new List<ReversalDataPoint>();
+        var upNonReversalData = new List<ReversalDataPoint>();
+        var downNonReversalData = new List<ReversalDataPoint>();
 
         if (consecutiveMovements <= 0)
         {
@@ -20,8 +22,10 @@ public class ReversalCalculator : IReversalCalculator
             {
                 UpReversalPercentage = 0,
                 DownReversalPercentage = 0,
-                UpReversalDates = upReversalDates,
-                DownReversalDates = downReversalDates
+                UpReversalData = upReversalData,
+                DownReversalData = downReversalData,
+                UpNonReversalData = upNonReversalData,
+                DownNonReversalData = downNonReversalData
             };
         }
 
@@ -52,7 +56,21 @@ public class ReversalCalculator : IReversalCalculator
                     if (i + consecutiveMovements < count && data[i + consecutiveMovements].Movement == Movement.Down)
                     {
                         upReversalCount++;
-                        upReversalDates.Add(data[i + consecutiveMovements].Timestamp);
+                        upReversalData.Add(new ReversalDataPoint
+                        {
+                            Timestamp = data[i + consecutiveMovements].Timestamp,
+                            Volume = data[i + consecutiveMovements].Volume,
+                            TradeCount = data[i + consecutiveMovements].TradeCount
+                        });
+                    }
+                    else if (i + consecutiveMovements < count)
+                    {
+                        upNonReversalData.Add(new ReversalDataPoint
+                        {
+                            Timestamp = data[i + consecutiveMovements].Timestamp,
+                            Volume = data[i + consecutiveMovements].Volume,
+                            TradeCount = data[i + consecutiveMovements].TradeCount
+                        });
                     }
                 }
                 else if (firstMovement == Movement.Down)
@@ -61,7 +79,21 @@ public class ReversalCalculator : IReversalCalculator
                     if (i + consecutiveMovements < count && data[i + consecutiveMovements].Movement == Movement.Up)
                     {
                         downReversalCount++;
-                        downReversalDates.Add(data[i + consecutiveMovements].Timestamp);
+                        downReversalData.Add(new ReversalDataPoint
+                        {
+                            Timestamp = data[i + consecutiveMovements].Timestamp,
+                            Volume = data[i + consecutiveMovements].Volume,
+                            TradeCount = data[i + consecutiveMovements].TradeCount
+                        });
+                    }
+                    else if (i + consecutiveMovements < count)
+                    {
+                        downNonReversalData.Add(new ReversalDataPoint
+                        {
+                            Timestamp = data[i + consecutiveMovements].Timestamp,
+                            Volume = data[i + consecutiveMovements].Volume,
+                            TradeCount = data[i + consecutiveMovements].TradeCount
+                        });
                     }
                 }
                 i += consecutiveMovements;
@@ -75,8 +107,10 @@ public class ReversalCalculator : IReversalCalculator
         {
             UpReversalPercentage = upReversalPercentage,
             DownReversalPercentage = downReversalPercentage,
-            UpReversalDates = upReversalDates,
-            DownReversalDates = downReversalDates
+            UpReversalData = upReversalData,
+            DownReversalData = downReversalData,
+            UpNonReversalData = upNonReversalData,
+            DownNonReversalData = downNonReversalData
         };
     }
 }
