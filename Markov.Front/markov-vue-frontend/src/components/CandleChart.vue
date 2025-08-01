@@ -17,6 +17,11 @@
 
     <button @click="resetZoom">Reset Zoom</button>
 
+<button @click="toggleFullscreen">
+  {{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
+</button>
+
+<div ref="fullscreenWrapper" class="chart-wrapper">
 
     <div v-if="!error">
         <h2>Reversal Probabilities</h2>
@@ -27,6 +32,8 @@
         </div>
     </div>
   </div>
+</div>
+
 </template>
 
 <script setup>
@@ -80,6 +87,25 @@ const resetZoom = () => {
     chartInstance.resetZoom();
   }
 };
+
+const isFullscreen = ref(false);
+const fullscreenWrapper = ref(null);
+
+const toggleFullscreen = async () => {
+  const el = fullscreenWrapper.value;
+
+  if (!document.fullscreenElement) {
+    await el.requestFullscreen();
+    isFullscreen.value = true;
+  } else {
+    await document.exitFullscreen();
+    isFullscreen.value = false;
+  }
+};
+
+document.addEventListener('fullscreenchange', () => {
+  isFullscreen.value = !!document.fullscreenElement;
+});
 
 const fetchData = async () => {
   loading.value = true;
@@ -309,5 +335,15 @@ canvas {
   display: block;
   width: 100% !important;
   height: 100% !important;
+}
+
+.chart-wrapper:fullscreen {
+  background: #111;
+  padding: 1rem;
+  z-index: 9999;
+}
+
+.chart-wrapper:fullscreen .chart-container {
+  height: 90vh;
 }
 </style>
