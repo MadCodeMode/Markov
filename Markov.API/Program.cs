@@ -26,12 +26,31 @@ builder.Services.AddTransient<IDataRepository, DataRepository>();
 builder.Services.AddTransient<IMarkovChainCalculator, MarkovChainCalculator>();
 builder.Services.AddTransient<IReversalCalculator, ReversalCalculator>();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("DevCorsPolicy", builder =>
+    {
+        builder
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddControllers(); 
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
+    dbContext.Database.Migrate(); // Applies migrations. Creates DB if it doesn't exist.
+}
+
 if (app.Environment.IsDevelopment())
 {
+    app.UseCors("DevCorsPolicy");
+
     app.UseSwagger();
     app.UseSwaggerUI();
 }
