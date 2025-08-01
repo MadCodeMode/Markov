@@ -25,6 +25,7 @@ builder.Services.AddTransient<ICryptoDataFetcher, BinanceDataFetcher>();
 builder.Services.AddTransient<IDataRepository, DataRepository>();
 builder.Services.AddTransient<IMarkovChainCalculator, MarkovChainCalculator>();
 builder.Services.AddTransient<IReversalCalculator, ReversalCalculator>();
+builder.Services.AddTransient<BacktesterService, BacktesterService>();
 
 builder.Services.AddCors(options =>
 {

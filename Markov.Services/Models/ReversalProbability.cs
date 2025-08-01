@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Markov.Services.Models
 {
     public class ReversalProbability

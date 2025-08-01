@@ -3,114 +3,157 @@ using Markov.Services.Models;
 
 namespace Markov.Services.Services;
 
+/// <summary>
+/// Calculates the historical probability of a price movement reversing
+/// after a specified number of consecutive movements in the same direction.
+/// </summary>
 public class ReversalCalculator : IReversalCalculator
 {
-    public ReversalProbability CalculateReversalProbability(Asset asset, int consecutiveMovements)
+    /// <summary>
+    /// Analyzes historical asset data to determine reversal probabilities.
+    /// </summary>
+    /// <param name="asset">The asset with its historical data.</param>
+    /// <param name="parameters">Parameters for the backtest, including the number of consecutive movements to look for.</param>
+    /// <returns>A <see cref="ReversalProbability"/> object containing the calculated percentages and underlying data points.</returns>
+    public ReversalProbability CalculateReversalProbability(Asset asset, BacktestParameters parameters)
     {
-        var upCount = 0;
-        var upReversalCount = 0;
-        var downCount = 0;
-        var downReversalCount = 0;
-        var upReversalData = new List<ReversalDataPoint>();
-        var downReversalData = new List<ReversalDataPoint>();
-        var upNonReversalData = new List<ReversalDataPoint>();
-        var downNonReversalData = new List<ReversalDataPoint>();
-
+        int consecutiveMovements = parameters.ConsecutiveMovements;
+        
+        // A sequence of 0 or less makes no sense, return an empty result.
         if (consecutiveMovements <= 0)
         {
-            return new ReversalProbability
-            {
-                UpReversalPercentage = 0,
-                DownReversalPercentage = 0,
-                UpReversalData = upReversalData,
-                DownReversalData = downReversalData,
-                UpNonReversalData = upNonReversalData,
-                DownNonReversalData = downNonReversalData
-            };
+            // Assuming ReversalProbability has a parameterless constructor
+            // and collections are initialized empty.
+            return new ReversalProbability();
         }
 
         var data = asset.HistoricalData;
-        var count = data.Count;
-        var i = 0;
+        var state = new CalculationState();
+        
+        // We need at least 'consecutiveMovements' plus one more candle to check for reversal.
+        int requiredDataLength = consecutiveMovements + 1;
+        int i = 0;
 
-        while (i <= count - consecutiveMovements - 1)
+        while (i <= data.Count - requiredDataLength)
         {
-            var firstMovement = data[i].Movement;
-            var sequenceFound = true;
-
-            for (var j = 1; j < consecutiveMovements; j++)
+            // Try to find and process a sequence at the current position 'i'.
+            if (TryProcessSequenceAt(i, data, consecutiveMovements, state))
             {
-                if (data[i + j].Movement != firstMovement)
-                {
-                    sequenceFound = false;
-                    i += j;
-                    break;
-                }
-            }
-
-            if (sequenceFound)
-            {
-                if (firstMovement == Movement.Up)
-                {
-                    upCount++;
-                    if (i + consecutiveMovements < count && data[i + consecutiveMovements].Movement == Movement.Down)
-                    {
-                        upReversalCount++;
-                        upReversalData.Add(new ReversalDataPoint
-                        {
-                            Timestamp = data[i + consecutiveMovements].Timestamp,
-                            Volume = data[i + consecutiveMovements].Volume,
-                            TradeCount = data[i + consecutiveMovements].TradeCount
-                        });
-                    }
-                    else if (i + consecutiveMovements < count)
-                    {
-                        upNonReversalData.Add(new ReversalDataPoint
-                        {
-                            Timestamp = data[i + consecutiveMovements].Timestamp,
-                            Volume = data[i + consecutiveMovements].Volume,
-                            TradeCount = data[i + consecutiveMovements].TradeCount
-                        });
-                    }
-                }
-                else if (firstMovement == Movement.Down)
-                {
-                    downCount++;
-                    if (i + consecutiveMovements < count && data[i + consecutiveMovements].Movement == Movement.Up)
-                    {
-                        downReversalCount++;
-                        downReversalData.Add(new ReversalDataPoint
-                        {
-                            Timestamp = data[i + consecutiveMovements].Timestamp,
-                            Volume = data[i + consecutiveMovements].Volume,
-                            TradeCount = data[i + consecutiveMovements].TradeCount
-                        });
-                    }
-                    else if (i + consecutiveMovements < count)
-                    {
-                        downNonReversalData.Add(new ReversalDataPoint
-                        {
-                            Timestamp = data[i + consecutiveMovements].Timestamp,
-                            Volume = data[i + consecutiveMovements].Volume,
-                            TradeCount = data[i + consecutiveMovements].TradeCount
-                        });
-                    }
-                }
+                // If a sequence was found and processed, skip past it.
                 i += consecutiveMovements;
+            }
+            else
+            {
+                // If no sequence was found, just move to the next candle.
+                i++;
             }
         }
 
-        var upReversalPercentage = upCount == 0 ? 0 : (double)upReversalCount / upCount;
-        var downReversalPercentage = downCount == 0 ? 0 : (double)downReversalCount / downCount;
+        return state.ToReversalProbability();
+    }
 
-        return new ReversalProbability
+    /// <summary>
+    /// Checks for a consecutive sequence at a given index and records the outcome if found.
+    /// </summary>
+    /// <returns>True if a sequence was found, otherwise false.</returns>
+    private bool TryProcessSequenceAt(int index, IReadOnlyList<Candle> data, int sequenceLength, CalculationState state)
+    {
+        var firstMovement = data[index].Movement;
+
+        // Check if the next 'sequenceLength' candles all have the same movement.
+        for (var j = 1; j < sequenceLength; j++)
         {
-            UpReversalPercentage = upReversalPercentage,
-            DownReversalPercentage = downReversalPercentage,
-            UpReversalData = upReversalData,
-            DownReversalData = downReversalData,
-            UpNonReversalData = upNonReversalData,
-            DownNonReversalData = downNonReversalData
+            if (data[index + j].Movement != firstMovement)
+            {
+                return false; // Sequence broken.
+            }
+        }
+
+        // A full sequence was found, so record its outcome.
+        var outcomeCandle = data[index + sequenceLength];
+        RecordOutcome(firstMovement, outcomeCandle, state);
+        return true;
+    }
+
+    /// <summary>
+    /// Records the outcome (reversal or continuation) after a sequence is identified.
+    /// </summary>
+    private void RecordOutcome(Movement sequenceDirection, Candle outcomeCandle, CalculationState state)
+    {
+        var dataPoint = new ReversalDataPoint
+        {
+            Timestamp = outcomeCandle.Timestamp,
+            Volume = outcomeCandle.Volume,
+            TradeCount = outcomeCandle.TradeCount
         };
+
+        if (sequenceDirection == Movement.Up)
+        {
+            bool isReversal = outcomeCandle.Movement == Movement.Down;
+            state.RecordUpSequence(isReversal, dataPoint);
+        }
+        else // sequenceDirection == Movement.Down
+        {
+            bool isReversal = outcomeCandle.Movement == Movement.Up;
+            state.RecordDownSequence(isReversal, dataPoint);
+        }
+    }
+
+    /// <summary>
+    /// A private class to encapsulate the state of the calculation.
+    /// This avoids polluting the main method with numerous local variables.
+    /// </summary>
+    private class CalculationState
+    {
+        private int _upCount;
+        private int _upReversalCount;
+        private int _downCount;
+        private int _downReversalCount;
+        
+        private readonly List<ReversalDataPoint> _upReversalData = new();
+        private readonly List<ReversalDataPoint> _downReversalData = new();
+        private readonly List<ReversalDataPoint> _upNonReversalData = new();
+        private readonly List<ReversalDataPoint> _downNonReversalData = new();
+
+        public void RecordUpSequence(bool isReversal, ReversalDataPoint dataPoint)
+        {
+            _upCount++;
+            if (isReversal)
+            {
+                _upReversalCount++;
+                _upReversalData.Add(dataPoint);
+            }
+            else
+            {
+                _upNonReversalData.Add(dataPoint);
+            }
+        }
+
+        public void RecordDownSequence(bool isReversal, ReversalDataPoint dataPoint)
+        {
+            _downCount++;
+            if (isReversal)
+            {
+                _downReversalCount++;
+                _downReversalData.Add(dataPoint);
+            }
+            else
+            {
+                _downNonReversalData.Add(dataPoint);
+            }
+        }
+        
+        public ReversalProbability ToReversalProbability()
+        {
+            return new ReversalProbability
+            {
+                UpReversalPercentage = _upCount == 0 ? 0 : (double)_upReversalCount / _upCount,
+                DownReversalPercentage = _downCount == 0 ? 0 : (double)_downReversalCount / _downCount,
+                UpReversalData = _upReversalData,
+                DownReversalData = _downReversalData,
+                UpNonReversalData = _upNonReversalData,
+                DownNonReversalData = _downNonReversalData
+            };
+        }
     }
 }

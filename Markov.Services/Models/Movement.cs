@@ -14,3 +14,18 @@ public enum AssetType
     Bonds,
     Realestate
 }
+
+// --- Enums for Configuration ---
+public enum TradeSizeMode
+{
+    FixedAmount,
+    PercentageOfCapital
+}
+
+public enum TradeOutcome
+{
+    TakeProfit,
+    StopLoss,
+    MovedToHold,
+    Continuation // No action taken
+}
