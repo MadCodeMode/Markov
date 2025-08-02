@@ -36,5 +36,5 @@ public enum TradeOutcome
     /// The trade did not hit a TP or SL and was closed at the end of the day.
     /// </summary>
     CloseOut,
-    Continuation // No action taken
+    MovedToHold
 }
