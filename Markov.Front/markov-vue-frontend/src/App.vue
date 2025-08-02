@@ -1,13 +1,16 @@
-<script setup>
-import CandleChart from './components/CandleChart.vue'
-</script>
-
 <template>
-  <div style="padding: 2rem">
-    <h2>Combined Chart View</h2>
-    <CandleChart />
+  <div id="app">
+    <nav>
+      <router-link to="/">Home</router-link> |
+      <router-link to="/backtest">Backtest</router-link>
+    </nav>
+    <router-view/>
   </div>
 </template>
 
 <style scoped>
+nav {
+  padding: 1rem;
+  text-align: center;
+}
 </style>

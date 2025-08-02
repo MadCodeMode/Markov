@@ -33,9 +33,9 @@ namespace Markov.API.Controllers
         }
 
         [HttpGet("assets")]
-        public async Task<IActionResult> GetSavedData([FromQuery] DateTime startDate)
+        public async Task<IActionResult> GetSavedData()
         {
-            var assets = await _dataRepository.GetAssetAsync("BTCUSDT", startDate);
+            var assets = await _dataRepository.GetAssetAsync("BTCUSDT");
             _logger.LogInformation(string.Join('\n', assets));
 
             return Ok(assets);
