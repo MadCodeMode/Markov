@@ -15,7 +15,7 @@ namespace Markov.Services.Repositories
             _context = context;
         }
 
-        public async Task<Asset> GetAssetAsync(string assetName)
+        public async Task<Asset> GetAssetAsync(string assetName, DateTime? startDate = null)
         {
             var asset = await _context.Assets
                 .Include(a => a.HistoricalData)
@@ -23,7 +23,15 @@ namespace Markov.Services.Repositories
 
             if (asset != null)
             {
-                asset.HistoricalData = asset.HistoricalData.OrderBy(c => c.Timestamp).ToList();
+                if (startDate != null)
+                {
+                    asset.HistoricalData = asset.HistoricalData
+                        .Where(c => c.Timestamp >= startDate.Value).OrderBy(c => c.Timestamp).ToList();
+                }
+                else
+                {
+                    asset.HistoricalData = asset.HistoricalData.OrderBy(c => c.Timestamp).ToList();
+                }
             }
 
             return asset;

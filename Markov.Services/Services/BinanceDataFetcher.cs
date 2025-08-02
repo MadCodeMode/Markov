@@ -18,17 +18,17 @@ public class BinanceDataFetcher : ICryptoDataFetcher
         IOptions<BinanceSettings> settings,
         ILogger<BinanceDataFetcher> logger)
     {
-        //if (string.IsNullOrWhiteSpace(settings.Value.ApiKey) || string.IsNullOrWhiteSpace(settings.Value.ApiSecret))
-        //{
-        //    throw new ArgumentException("Binance API key and secret must be configured.");
-        //}
+        if (string.IsNullOrWhiteSpace(settings.Value.ApiKey) || string.IsNullOrWhiteSpace(settings.Value.ApiSecret))
+        {
+           throw new ArgumentException("Binance API key and secret must be configured.");
+        }
 
         _logger = logger; 
 
-        //_client = new BinanceRestClient(options =>
-        //{
-        //    options.ApiCredentials = new ApiCredentials(settings.Value.ApiKey, settings.Value.ApiSecret);
-        //});
+        _client = new BinanceRestClient(options =>
+        {
+           options.ApiCredentials = new ApiCredentials(settings.Value.ApiKey, settings.Value.ApiSecret);
+        });
     }
 
     public async Task<Asset> FetchDataAsync(string assetName, DateTime from, DateTime to)

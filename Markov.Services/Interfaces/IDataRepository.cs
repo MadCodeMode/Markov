@@ -4,7 +4,7 @@ namespace Markov.Services.Interfaces;
 
 public interface IDataRepository
 {
-    Task<Asset> GetAssetAsync(string assetName);
+    Task<Asset> GetAssetAsync(string assetName, DateTime? startDate = null);
     Task<IEnumerable<Asset>> GetAllAssetsAsync();
     Task UpsertAssetAsync(Asset asset);
 }

@@ -1,5 +1,6 @@
 using Markov.Services.Interfaces;
 using Markov.Services.Models;
+using Markov.Services.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Markov.API.Controllers
@@ -12,6 +13,7 @@ namespace Markov.API.Controllers
         private readonly IDataRepository _dataRepository;
         private readonly IMarkovChainCalculator _markovChainCalculator;
         private readonly IReversalCalculator _reversalCalculator;
+        private readonly BacktesterService _backtesterService;
         private readonly ILogger<MarkovController> _logger;
 
         public MarkovController(
@@ -19,19 +21,21 @@ namespace Markov.API.Controllers
             IDataRepository dataRepository,
             IMarkovChainCalculator markovChainCalculator,
             IReversalCalculator reversalCalculator,
-            ILogger<MarkovController> logger)
+            ILogger<MarkovController> logger,
+            BacktesterService backtesterService)
         {
             _cryptoDataFetcher = cryptoDataFetcher;
             _dataRepository = dataRepository;
             _markovChainCalculator = markovChainCalculator;
             _reversalCalculator = reversalCalculator;
             _logger = logger;
+            _backtesterService = backtesterService;
         }
 
         [HttpGet("assets")]
         public async Task<IActionResult> GetSavedData()
         {
-            var assets = await _dataRepository.GetAllAssetsAsync();
+            var assets = await _dataRepository.GetAssetAsync("BTCUSDT");
             _logger.LogInformation(string.Join('\n', assets));
 
             return Ok(assets);
@@ -63,8 +67,10 @@ namespace Markov.API.Controllers
             return Ok($"Probability of next movement being Up for {assetName} with pattern {patternString}: {probability:P}");
         }
 
-        [HttpGet("calc-reversal/{assetName}")]
-        public async Task<IActionResult> CalculateReversalProbability(string assetName, [FromQuery] int consecutiveMovements)
+        [HttpPost("calc-reversal/{assetName}")]
+        public async Task<IActionResult> CalculateReversalProbability(
+            string assetName,
+            [FromBody] BacktestParameters parameters)
         {
             var asset = await _dataRepository.GetAssetAsync(assetName);
             if (asset == null)
@@ -72,7 +78,23 @@ namespace Markov.API.Controllers
                 return NotFound($"Asset {assetName} not found.");
             }
 
-            var probabilities = _reversalCalculator.CalculateReversalProbability(asset, consecutiveMovements);
+            var probabilities = _reversalCalculator.CalculateReversalProbability(asset, parameters);
+
+            return Ok(probabilities);
+        }
+
+                [HttpPost("calc-reversal/{assetName}/backtest")]
+        public async Task<IActionResult> BackTestAsset(
+            string assetName,
+            [FromBody] BacktestParameters parameters)
+        {
+            var asset = await _dataRepository.GetAssetAsync(assetName);
+            if (asset == null)
+            {
+                return NotFound($"Asset {assetName} not found.");
+            }
+
+            var probabilities = _backtesterService.Run(asset, parameters);
 
             return Ok(probabilities);
         }
