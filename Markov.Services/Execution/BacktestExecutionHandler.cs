@@ -26,29 +26,108 @@ public class BacktestExecutionHandler : IExecutionHandler
 
     public void ProcessSignal(TradeSignal signal, Candle currentCandle)
     {
-        // For this strategy, a signal at candle 'i' is executed at the open of 'i+1'.
-        // The signal was generated based on data up to `currentCandle` (index i).
-        // The trade is executed on the next candle (index i+1).
-        
         int executionIndex = _candles.IndexOf(currentCandle) + 1;
-        if (executionIndex >= _candles.Count) return; // Cannot execute on the last candle
+        if (executionIndex >= _candles.Count) return;
 
         var executionCandle = _candles[executionIndex];
-        
-        // Much of the logic from your original file's loop body goes here
-        // ... (sizing, risk calculation, PnL, etc.) ...
-        // This is a simplified example; you would port over your full PnL logic.
-        
+
+        decimal tradeSize = _params.TradeSizeMode == TradeSizeMode.FixedAmount
+            ? _params.TradeSizeFixedAmount
+            : _tradingCapital * _params.TradeSizePercentage;
+
+        if (_params.EnableAtrTargets && _atr[executionIndex] <= 0)
+        {
+            return; // Skip trade if ATR is invalid
+        }
+
+        if (tradeSize > _tradingCapital) tradeSize = _tradingCapital;
+        if (tradeSize <= 0) return;
+
         var record = new TradeRecord
         {
             Timestamp = executionCandle.Timestamp,
+            Signal = $"{signal.Type} Signal",
+            AmountInvested = tradeSize,
             EntryPrice = executionCandle.Open,
-            // Capture the 'why' of the trade
             Notes = string.Join(" | ", signal.TriggerConditions.Select(kv => $"{kv.Key}: {kv.Value}"))
         };
 
-        // ... Add your detailed logic for long/short, TP/SL, and hold moves here ...
-        // This part would be a direct port of the logic inside your "Handle LONG" and "Handle SHORT" blocks.
+        if (signal.Type == SignalType.Long)
+        {
+            decimal takeProfitPrice = _params.EnableAtrTargets
+                ? record.EntryPrice + (_atr[executionIndex] * _params.TakeProfitAtrMultiplier)
+                : record.EntryPrice * (1 + _params.TakeProfitPercentage);
+
+            if (executionCandle.High >= takeProfitPrice)
+            {
+                record.Outcome = TradeOutcome.TakeProfit;
+                record.ExitPrice = takeProfitPrice;
+            }
+            else
+            {
+                record.Outcome = TradeOutcome.CloseOut;
+                record.ExitPrice = executionCandle.Close;
+            }
+
+            decimal pnl = (record.ExitPrice - record.EntryPrice) * (tradeSize / record.EntryPrice);
+            decimal fees = tradeSize * _params.TradeFeePercentage * 2;
+            decimal finalPnl = pnl - fees;
+
+            if (finalPnl < 0)
+            {
+                record.Outcome = TradeOutcome.MovedToHold;
+                record.Pnl = 0;
+                decimal assetQuantityBought = tradeSize / record.EntryPrice;
+                _holdAccountAssetQuantity += assetQuantityBought;
+                _tradingCapital -= tradeSize;
+                record.Notes += $" | Moved {assetQuantityBought:F8} of asset to hold account.";
+                _holdMoveCount++;
+            }
+            else
+            {
+                record.Pnl = finalPnl;
+                _tradingCapital += record.Pnl * _params.ReinvestmentPercentage;
+                _realizedPnl += record.Pnl * (1 - _params.ReinvestmentPercentage);
+                if (record.Pnl > 0) _winCount++;
+                else _lossCount++;
+            }
+        }
+        else if (signal.Type == SignalType.Short)
+        {
+            decimal stopLossPrice = _params.EnableAtrTargets
+                ? record.EntryPrice + (_atr[executionIndex] * _params.StopLossAtrMultiplier)
+                : record.EntryPrice * (1 + _params.StopLossPercentage);
+
+            decimal takeProfitPrice = _params.EnableAtrTargets
+                ? record.EntryPrice - (_atr[executionIndex] * _params.TakeProfitAtrMultiplier)
+                : record.EntryPrice * (1 - _params.TakeProfitPercentage);
+
+            if (executionCandle.High >= stopLossPrice)
+            {
+                record.Outcome = TradeOutcome.StopLoss;
+                record.ExitPrice = stopLossPrice;
+            }
+            else if (executionCandle.Low <= takeProfitPrice)
+            {
+                record.Outcome = TradeOutcome.TakeProfit;
+                record.ExitPrice = takeProfitPrice;
+            }
+            else
+            {
+                record.Outcome = TradeOutcome.CloseOut;
+                record.ExitPrice = executionCandle.Close;
+            }
+
+            decimal pnl = (record.EntryPrice - record.ExitPrice) * (tradeSize / record.EntryPrice);
+            decimal fees = tradeSize * _params.TradeFeePercentage * 2;
+            record.Pnl = pnl - fees;
+
+            _tradingCapital += record.Pnl * _params.ReinvestmentPercentage;
+            _realizedPnl += record.Pnl * (1 - _params.ReinvestmentPercentage);
+
+            if (record.Pnl > 0) _winCount++;
+            else _lossCount++;
+        }
 
         _tradeHistory.Add(record);
     }
