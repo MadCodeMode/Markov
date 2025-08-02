@@ -85,15 +85,17 @@ public class BacktesterService
                 tradingCapital += record.Pnl * parameters.ReinvestmentPercentage;
                 realizedPnl += record.Pnl * (1 - parameters.ReinvestmentPercentage);
 
-                // Asymmetric Penalty: If the trade lost money, move capital to hold account
                 if (record.Pnl < 0)
                 {
+                    // Set PnL to 0 (loss is not realized), and move traded amount to hold account
+                    record.Pnl = 0;
+
                     decimal amountToMove = Math.Min(tradeSize, tradingCapital);
                     if (amountToMove > 0)
                     {
                         tradingCapital -= amountToMove;
                         holdAccount += amountToMove;
-                        record.Notes = $"Trade loss. Moved ${amountToMove:F2} to hold account as penalty.";
+                        record.Notes = $"Trade loss ignored. Moved ${amountToMove:F2} to hold account instead.";
                     }
                 }
             }
