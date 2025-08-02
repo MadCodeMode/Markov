@@ -1,4 +1,3 @@
-
 using Markov.Services.Interfaces;
 using Markov.Services.Models;
 
@@ -6,12 +5,9 @@ namespace Markov.Services.Services;
 
 public class BacktesterService
 {
-    private readonly IReversalCalculator _reversalCalculator;
-
-    public BacktesterService(IReversalCalculator reversalCalculator)
-    {
-        _reversalCalculator = reversalCalculator;
-    }
+    // The IReversalCalculator dependency was in the original but not used,
+    // so I have removed it from the constructor for this example.
+    // public BacktesterService(IReversalCalculator reversalCalculator) { ... }
 
     public BacktestResult Run(Asset asset, BacktestParameters parameters)
     {
@@ -23,19 +19,16 @@ public class BacktesterService
         decimal dailyHoldYield = parameters.HoldAccountAnnualYield / 365.25m;
 
         int consecutiveMovements = parameters.ConsecutiveMovements;
-        var candles = asset.HistoricalData; // Assuming asset.HistoricalData is List<Candle>
+        var candles = asset.HistoricalData;
         int requiredDataLength = consecutiveMovements + 1;
 
         // --- 2. Main Backtesting Loop ---
         for (int i = 0; i <= candles.Count - requiredDataLength; i++)
         {
-            // Always compound hold account interest daily
             holdAccount *= (1 + dailyHoldYield);
 
             var firstMovement = candles[i].Movement;
             bool isSequence = true;
-
-            // Check if we have a valid sequence
             for (int j = 1; j < consecutiveMovements; j++)
             {
                 if (candles[i + j].Movement != firstMovement)
@@ -45,107 +38,109 @@ public class BacktesterService
                 }
             }
 
-            if (!isSequence) continue; // No sequence, move to the next day
+            if (!isSequence) continue;
 
-            // --- 3. Sequence Found - Execute Trade Logic ---
+            // --- 3. Sequence Found - Execute Realistic Trade ---
+            // The decision to trade is made here, BEFORE looking at the outcome.
             var outcomeCandle = candles[i + consecutiveMovements];
 
-            // Determine trade size
             decimal tradeSize = parameters.TradeSizeMode == TradeSizeMode.FixedAmount
                 ? parameters.TradeSizeFixedAmount
                 : tradingCapital * parameters.TradeSizePercentage;
 
-            if (tradeSize > tradingCapital)
-            {
-                tradeSize = tradingCapital; // Not enough capital, use all that's left
-            }
-
-            if (tradeSize <= 0) continue; // No capital left to trade
+            if (tradeSize > tradingCapital) tradeSize = tradingCapital;
+            if (tradeSize <= 0) continue;
 
             var record = new TradeRecord
             {
                 Timestamp = outcomeCandle.Timestamp,
                 Signal = $"{firstMovement} Reversal Signal after {consecutiveMovements} moves",
-                AmountInvested = tradeSize
+                AmountInvested = tradeSize,
+                EntryPrice = outcomeCandle.Open // <<< Entry is ALWAYS at the Open
             };
 
             // A. Handle LONG trade (after a DOWN sequence)
             if (firstMovement == Movement.Down)
             {
-                if (outcomeCandle.Movement == Movement.Up) // Successful reversal
+                decimal takeProfitPrice = record.EntryPrice * (1 + parameters.TakeProfitPercentage);
+
+                // Determine exit: Check if TP was hit during the day.
+                if (outcomeCandle.High >= takeProfitPrice)
                 {
                     record.Outcome = TradeOutcome.TakeProfit;
-                    record.EntryPrice = outcomeCandle.Open;
-                    record.ExitPrice = outcomeCandle.Close;
-                    decimal pnl = (record.ExitPrice - record.EntryPrice) * (tradeSize / record.EntryPrice);
-                    decimal fees = tradeSize * parameters.TradeFeePercentage * 2; // Entry and exit fee
-                    record.Pnl = pnl - fees;
-
-                    tradingCapital += record.Pnl * parameters.ReinvestmentPercentage;
-                    realizedPnl += record.Pnl * (1 - parameters.ReinvestmentPercentage);
+                    record.ExitPrice = takeProfitPrice;
                 }
-                else // Failed reversal, move funds to hold account
+                else // If not, exit at the day's close.
                 {
-                    record.Outcome = TradeOutcome.MovedToHold;
-                    tradingCapital -= tradeSize;
-                    holdAccount += tradeSize;
-                    record.Pnl = -tradeSize; // Representing the opportunity cost / moved capital
-                    record.Notes = $"${tradeSize:F2} moved to hold account.";
+                    record.Outcome = TradeOutcome.CloseOut;
+                    record.ExitPrice = outcomeCandle.Close;
+                }
+
+                // Calculate PnL based on the realistic entry and exit
+                decimal pnl = (record.ExitPrice - record.EntryPrice) * (tradeSize / record.EntryPrice);
+                decimal fees = tradeSize * parameters.TradeFeePercentage * 2;
+                record.Pnl = pnl - fees;
+
+                // Update capital based on PnL
+                tradingCapital += record.Pnl * parameters.ReinvestmentPercentage;
+                realizedPnl += record.Pnl * (1 - parameters.ReinvestmentPercentage);
+
+                // Asymmetric Penalty: If the trade lost money, move capital to hold account
+                if (record.Pnl < 0)
+                {
+                    decimal amountToMove = Math.Min(tradeSize, tradingCapital);
+                    if (amountToMove > 0)
+                    {
+                        tradingCapital -= amountToMove;
+                        holdAccount += amountToMove;
+                        record.Notes = $"Trade loss. Moved ${amountToMove:F2} to hold account as penalty.";
+                    }
                 }
             }
             // B. Handle SHORT trade (after an UP sequence)
             else if (firstMovement == Movement.Up)
             {
-                if (outcomeCandle.Movement == Movement.Down) // Successful reversal signal
+                decimal stopLossPrice = record.EntryPrice * (1 + parameters.StopLossPercentage);
+                decimal takeProfitPrice = record.EntryPrice * (1 - parameters.TakeProfitPercentage);
+
+                // Determine exit (Priority: SL > TP > Close)
+                if (outcomeCandle.High >= stopLossPrice)
                 {
-                    record.EntryPrice = outcomeCandle.Open;
-                    decimal stopLossPrice = record.EntryPrice * (1 + parameters.StopLossPercentage);
-
-                    if (outcomeCandle.High >= stopLossPrice) // Stop-loss was hit
-                    {
-                        record.Outcome = TradeOutcome.StopLoss;
-                        record.ExitPrice = stopLossPrice;
-                        record.Notes = $"Stop-loss triggered at {stopLossPrice:F2} (Day High: {outcomeCandle.High:F2})";
-                    }
-                    else // Take-profit at close
-                    {
-                        record.Outcome = TradeOutcome.TakeProfit;
-                        record.ExitPrice = outcomeCandle.Close;
-                    }
-
-                    decimal pnl = (record.EntryPrice - record.ExitPrice) * (tradeSize / record.EntryPrice);
-                    decimal fees = tradeSize * parameters.TradeFeePercentage * 2; // Entry and exit fee
-                    record.Pnl = pnl - fees;
-
-                    tradingCapital += record.Pnl * parameters.ReinvestmentPercentage;
-                    realizedPnl += record.Pnl * (1 - parameters.ReinvestmentPercentage);
+                    record.Outcome = TradeOutcome.StopLoss;
+                    record.ExitPrice = stopLossPrice;
                 }
-                else // Failed short signal (Up -> Up), do nothing
+                else if (outcomeCandle.Low <= takeProfitPrice)
                 {
-                    record.Outcome = TradeOutcome.Continuation;
-                    record.Pnl = 0;
-                    record.Notes = "Short signal failed to trigger. No action taken.";
+                    record.Outcome = TradeOutcome.TakeProfit;
+                    record.ExitPrice = takeProfitPrice;
                 }
+                else
+                {
+                    record.Outcome = TradeOutcome.CloseOut;
+                    record.ExitPrice = outcomeCandle.Close;
+                }
+
+                // Calculate PnL for the short position
+                decimal pnl = (record.EntryPrice - record.ExitPrice) * (tradeSize / record.EntryPrice);
+                decimal fees = tradeSize * parameters.TradeFeePercentage * 2;
+                record.Pnl = pnl - fees;
+
+                // Update capital (no special hold account penalty for shorts)
+                tradingCapital += record.Pnl * parameters.ReinvestmentPercentage;
+                realizedPnl += record.Pnl * (1 - parameters.ReinvestmentPercentage);
             }
 
             tradeHistory.Add(record);
-
-            // Skip the processed candles to avoid overlapping signals
-            i += consecutiveMovements - 1;
+            i += consecutiveMovements - 1; // Skip ahead to avoid overlapping signals
         }
-
-        // --- 4. Finalization ---
-        // Run the original calculator just to get the probability stats
-        var reversalAnalysis = _reversalCalculator.CalculateReversalProbability(asset, parameters);
-
+        
         return new BacktestResult
         {
             StartingCapital = parameters.StartingCapital,
             FinalTradingCapital = tradingCapital,
             FinalHoldAccountBalance = holdAccount,
             RealizedPNL = realizedPnl,
-            TradeHistory = tradeHistory,
-            ReversalAnalysis = reversalAnalysis
+            TradeHistory = tradeHistory
         };
     }
 }

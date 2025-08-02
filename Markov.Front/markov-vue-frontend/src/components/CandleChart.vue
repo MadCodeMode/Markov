@@ -113,7 +113,9 @@ const fetchData = async () => {
   try {
 
     const assetResPromise = axios.get(`http://localhost:8080/Markov/assets`);
-    const reversalResPromise = axios.get(`http://localhost:8080/Markov/calc-reversal/${assetName.value}?consecutiveMovements=${consecutiveMovements.value}`);
+    const reversalResPromise = axios.post(`http://localhost:8080/Markov/calc-reversal/${assetName.value}`, {
+      consecutiveMovements: consecutiveMovements.value
+    });
 
     const [assetRes, reversalRes] = await Promise.all([assetResPromise, reversalResPromise]);
 
