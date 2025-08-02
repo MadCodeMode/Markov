@@ -1,9 +1,12 @@
+
 using HealthChecks.UI.Client;
 using Markov.Services;
+using Markov.Services.Core;
 using Markov.Services.Interfaces;
 using Markov.Services.Models;
-using Markov.Services.Repositories; 
+using Markov.Services.Repositories;
 using Markov.Services.Services;
+using Markov.Services.Strategies;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,12 +23,14 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks()
     .AddSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 
+// --- Existing Service Registrations ---
 builder.Services.Configure<BinanceSettings>(builder.Configuration.GetSection("Binance"));
 builder.Services.AddTransient<ICryptoDataFetcher, BinanceDataFetcher>();
 builder.Services.AddTransient<IDataRepository, DataRepository>();
 builder.Services.AddTransient<IMarkovChainCalculator, MarkovChainCalculator>();
 builder.Services.AddTransient<IReversalCalculator, ReversalCalculator>();
 builder.Services.AddTransient<BacktesterService, BacktesterService>();
+
 
 builder.Services.AddCors(options =>
 {
@@ -38,7 +43,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers(); 
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
@@ -58,7 +63,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapControllers(); 
+app.MapControllers();
 
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
