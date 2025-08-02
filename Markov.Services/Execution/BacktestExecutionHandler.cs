@@ -22,23 +22,35 @@ public class BacktestExecutionHandler : IExecutionHandler
         _candles = candles;
         _atr = atr;
         _tradingCapital = parameters.StartingCapital;
+        
+        if (_candles.Count != _atr.Length)
+            throw new ArgumentException("ATR array must match candle count.");
     }
 
-    public void ProcessSignal(TradeSignal signal, Candle currentCandle)
+    public void ProcessSignal(TradeSignal signal, Candle currentCandle, int currentIndex)
     {
         int executionIndex = _candles.IndexOf(currentCandle) + 1;
         if (executionIndex >= _candles.Count) return;
 
         var executionCandle = _candles[executionIndex];
 
-        decimal tradeSize = _params.TradeSizeMode == TradeSizeMode.FixedAmount
-            ? _params.TradeSizeFixedAmount
-            : _tradingCapital * _params.TradeSizePercentage;
+         // Defensive check
+        if (_atr.Length <= executionIndex)
+        {
+            // Log or skip if misaligned
+            return;
+        }
 
         if (_params.EnableAtrTargets && _atr[executionIndex] <= 0)
         {
             return; // Skip trade if ATR is invalid
         }
+
+
+        decimal tradeSize = _params.TradeSizeMode == TradeSizeMode.FixedAmount
+            ? _params.TradeSizeFixedAmount
+            : _tradingCapital * _params.TradeSizePercentage;
+
 
         if (tradeSize > _tradingCapital) tradeSize = _tradingCapital;
         if (tradeSize <= 0) return;

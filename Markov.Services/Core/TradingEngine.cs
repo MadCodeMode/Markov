@@ -33,7 +33,7 @@ public class TradingEngine
             {
                 // Pass the signal and the current candle to the execution handler.
                 // The handler will execute the trade on the *next* candle's open.
-                _executionHandler.ProcessSignal(signal, _candles[i]);
+                _executionHandler.ProcessSignal(signal, _candles[i], i);
             }
         }
 

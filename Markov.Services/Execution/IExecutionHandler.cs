@@ -4,6 +4,6 @@ namespace Markov.Services.Execution;
 
 public interface IExecutionHandler
 {
-    void ProcessSignal(TradeSignal signal, Candle currentCandle);
+    void ProcessSignal(TradeSignal signal, Candle currentCandle, int currentIndex);
     BacktestResult GetResult();
 }
