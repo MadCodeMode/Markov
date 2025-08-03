@@ -133,4 +133,33 @@ public class LiveTradingServiceTests
         dto.Symbol.Should().Be("ETHUSDT");
         dto.StrategyName.Should().Be("Test Strategy");
     }
+
+    [Fact]
+    public async Task StartAndStopSession_Concurrently_ShouldNotThrow()
+    {
+        // Arrange
+        const int concurrencyLevel = 10;
+        var strategyId = Guid.NewGuid();
+        var mockStrategy = new Mock<IStrategy>();
+        _mockStrategyService.Setup(s => s.GetStrategy(strategyId)).Returns(mockStrategy.Object);
+
+        // Since the mock context is not thread-safe, we need to handle the 'Find' setup carefully.
+        _mockSessionSet.Setup(m => m.Find(It.IsAny<object[]>()))
+            .Returns((object[] ids) => new LiveSession { Id = (Guid)ids[0], Status = "Running" });
+
+        // Act
+        var tasks = new List<Task>();
+        for (int i = 0; i < concurrencyLevel; i++)
+        {
+            tasks.Add(Task.Run(() =>
+            {
+                var sessionId = _liveTradingService.StartSession(strategyId, "BTCUSDT", "OneMinute");
+                _liveTradingService.StopSession(sessionId);
+            }));
+        }
+
+        // Assert
+        // The assertion is that this does not throw an exception.
+        await FluentActions.Awaiting(() => Task.WhenAll(tasks)).Should().NotThrowAsync();
+    }
 }
