@@ -1,60 +1,54 @@
 using Markov.Services.Enums;
 using Markov.Services.Indicators;
+using Markov.Services.Interfaces;
 using Markov.Services.Models;
+using System.Collections.Generic;
+using System.Linq;
 
-namespace Markov.Services.Filters;
-
-public class TrendFilter : ISignalFilter
+namespace Markov.Services.Filters
 {
-    private readonly int _longTermMAPeriod;
-    private readonly SmaIndicator _smaIndicator;
-
-    public TrendFilter(int longTermMAPeriod = 200)
+    public class TrendFilter : ISignalFilter
     {
-        _longTermMAPeriod = longTermMAPeriod;
-        _smaIndicator = new SmaIndicator(_longTermMAPeriod);
-    }
+        private readonly IIndicator _smaIndicator;
 
-    public string Name => $"TrendFilter({_longTermMAPeriod})";
-
-    public IEnumerable<Signal> Apply(IEnumerable<Signal> signals, IDictionary<string, IEnumerable<Candle>> data)
-    {
-        var filteredSignals = new List<Signal>();
-
-        foreach (var signal in signals)
+        public TrendFilter(int longTermMAPeriod = 200)
+            : this(new SmaIndicator(longTermMAPeriod))
         {
-            if (!data.ContainsKey(signal.Symbol))
-            {
-                continue;
-            }
-
-            var candles = data[signal.Symbol].ToList();
-            var smaValues = _smaIndicator.Calculate(candles).ToList();
-            var signalCandleIndex = candles.FindIndex(c => c.Timestamp == signal.Timestamp);
-
-            if (signalCandleIndex == -1 || signalCandleIndex >= smaValues.Count)
-            {
-                continue; // Not enough data to calculate SMA for this signal
-            }
-
-            decimal currentPrice = candles[signalCandleIndex].Close;
-            decimal maValue = smaValues[signalCandleIndex];
-
-            // Rule: Only allow buy signals if the price is above the long-term moving average (uptrend).
-            if (signal.Type == SignalType.Buy && currentPrice < maValue)
-            {
-                continue; // Filter out buy signal in a downtrend
-            }
-
-            // Rule: Only allow sell signals if the price is below the long-term moving average (downtrend).
-            if (signal.Type == SignalType.Sell && currentPrice > maValue)
-            {
-                continue; // Filter out sell signal in an uptrend
-            }
-
-            filteredSignals.Add(signal);
+            Name = $"TrendFilter({longTermMAPeriod})";
+        }
+        
+        public TrendFilter(IIndicator smaIndicator)
+        {
+            _smaIndicator = smaIndicator;
+            Name = "TrendFilter";
         }
 
-        return filteredSignals;
+        public string Name { get; }
+
+        public IEnumerable<Signal> Apply(IEnumerable<Signal> signals, IDictionary<string, IEnumerable<Candle>> data)
+        {
+            var filteredSignals = new List<Signal>();
+
+            foreach (var signal in signals)
+            {
+                if (!data.ContainsKey(signal.Symbol)) continue;
+
+                var candles = data[signal.Symbol].ToList();
+                var smaValues = _smaIndicator.Calculate(candles).ToList();
+                var signalCandleIndex = candles.FindIndex(c => c.Timestamp == signal.Timestamp);
+
+                if (signalCandleIndex == -1 || signalCandleIndex >= smaValues.Count || smaValues[signalCandleIndex] == 0) continue;
+
+                decimal currentPrice = candles[signalCandleIndex].Close;
+                decimal maValue = smaValues[signalCandleIndex];
+                
+                if (signal.Type == SignalType.Buy && currentPrice < maValue) continue;
+                if (signal.Type == SignalType.Sell && currentPrice > maValue) continue;
+
+                filteredSignals.Add(signal);
+            }
+
+            return filteredSignals;
+        }
     }
 }
