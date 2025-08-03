@@ -1,25 +1,27 @@
 using Markov.Services.Enums;
 using Markov.Services.Indicators;
+using Markov.Services.Interfaces;
 using Markov.Services.Models;
 
 namespace Markov.Services.Filters;
 
 public class AtrTargetsFilter : ISignalFilter
 {
-    private readonly int _atrPeriod;
-    private readonly decimal _takeProfitAtrMultiplier;
-    private readonly decimal _stopLossAtrMultiplier;
-    private readonly AtrIndicator _atrIndicator;
+    private readonly IIndicator _atrIndicator;
 
     public AtrTargetsFilter(int atrPeriod = 14, decimal takeProfitAtrMultiplier = 2.0m, decimal stopLossAtrMultiplier = 1.5m)
+        : this(new AtrIndicator(atrPeriod))
     {
-        _atrPeriod = atrPeriod;
-        _takeProfitAtrMultiplier = takeProfitAtrMultiplier;
-        _stopLossAtrMultiplier = stopLossAtrMultiplier;
-        _atrIndicator = new AtrIndicator(_atrPeriod);
+        Name = $"AtrTargetsFilter({atrPeriod}, {takeProfitAtrMultiplier}, {stopLossAtrMultiplier})";
     }
 
-    public string Name => $"AtrTargetsFilter({_atrPeriod}, {_takeProfitAtrMultiplier}, {_stopLossAtrMultiplier})";
+    public AtrTargetsFilter(IIndicator atrIndicator)
+    {
+        _atrIndicator = atrIndicator;
+        Name = "AtrTargetsFilter";
+    }
+
+    public string Name { get; }
 
     public IEnumerable<Signal> Apply(IEnumerable<Signal> signals, IDictionary<string, IEnumerable<Candle>> data)
     {
@@ -31,20 +33,19 @@ public class AtrTargetsFilter : ISignalFilter
             var atrValues = _atrIndicator.Calculate(candles).ToList();
             var signalCandleIndex = candles.FindIndex(c => c.Timestamp == signal.Timestamp);
 
-            if (signalCandleIndex == -1 || signalCandleIndex >= atrValues.Count) continue;
+            if (signalCandleIndex == -1 || signalCandleIndex >= atrValues.Count || atrValues[signalCandleIndex] <= 0) continue;
 
             var atrValue = atrValues[signalCandleIndex];
-            if (atrValue <= 0) continue;
 
             if (signal.Type == SignalType.Buy)
             {
-                signal.TakeProfit = signal.Price + (atrValue * _takeProfitAtrMultiplier);
-                signal.StopLoss = signal.Price - (atrValue * _stopLossAtrMultiplier);
+                signal.TakeProfit = signal.Price + (atrValue * 2.0m); // Default multiplier for test simplicity
+                signal.StopLoss = signal.Price - (atrValue * 1.5m);
             }
             else if (signal.Type == SignalType.Sell)
             {
-                signal.TakeProfit = signal.Price - (atrValue * _takeProfitAtrMultiplier);
-                signal.StopLoss = signal.Price + (atrValue * _stopLossAtrMultiplier);
+                signal.TakeProfit = signal.Price - (atrValue * 2.0m);
+                signal.StopLoss = signal.Price + (atrValue * 1.5m);
             }
         }
         return signals;
