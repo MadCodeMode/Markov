@@ -1,5 +1,5 @@
+using Markov.Services.Enums;
 using Markov.Services.Interfaces;
-using Markov.Services.Models;
 
 public class BacktestParameters
 {

@@ -1,4 +1,4 @@
-using Markov.Services.Models;
+using Markov.Services.Enums;
 
 public class TradeRecord
 {

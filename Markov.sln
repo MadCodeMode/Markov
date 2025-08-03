@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Markov.Tests", "Markov.Tests\Markov.Tests.csproj", "{5D7AC864-6553-4C0A-8157-50FE9195BB32}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Markov.API", "Markov.API\Markov.API.csproj", "{74E89C40-CFEE-4492-B3EE-70CB53C3D0B1}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Markov.Services", "Markov.Services\Markov.Services.csproj", "{30F5F220-5307-4FBE-9F47-0F12F7D7662A}"
