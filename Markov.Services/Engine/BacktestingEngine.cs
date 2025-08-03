@@ -30,58 +30,6 @@ namespace Markov.Services.Engine
             {
                 var candle = candles[i];
 
-                // --- FIX: Process new signals FIRST for the current candle ---
-                var signalForThisCandle = signals.FirstOrDefault(s => s.Timestamp == candle.Timestamp);
-                if (signalForThisCandle != null)
-                {
-                    if (openPositions.Any(p => p.Symbol == signalForThisCandle.Symbol))
-                    {
-                        var positionToClose = openPositions.First(p => p.Symbol == signalForThisCandle.Symbol);
-                        if (positionToClose.Side != (signalForThisCandle.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell))
-                        {
-                             ClosePosition(positionToClose, signalForThisCandle.Price, candle.Timestamp, TradeOutcome.Closed, ref tradingCapital, result);
-                             openPositions.Remove(positionToClose);
-                        }
-                    }
-
-                    if (tradingCapital > 10) // Ensure there's enough capital to trade
-                    {
-                        // Use 10% of current capital for this trade
-                        var tradeSize = tradingCapital * 0.1m; 
-                        var quantity = tradeSize / signalForThisCandle.Price;
-
-                        if (signalForThisCandle.UseHoldStrategy && signalForThisCandle.Type == SignalType.Buy)
-                        {
-                            if (!heldAssets.ContainsKey(signalForThisCandle.Symbol))
-                            {
-                                heldAssets[signalForThisCandle.Symbol] = 0;
-                            }
-                            // Hold the quantity of the asset for this trade
-                            heldAssets[signalForThisCandle.Symbol] += quantity;
-                            // Reduce trading capital by the amount used for the held asset
-                            tradingCapital -= tradeSize; 
-                            result.HoldCount++;
-                        }
-                        else
-                        {
-                           openPositions.Add(new Trade
-                           {
-                               Side = signalForThisCandle.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell,
-                               Symbol = signalForThisCandle.Symbol,
-                               Quantity = quantity,
-                               EntryPrice = signalForThisCandle.Price,
-                               EntryTimestamp = signalForThisCandle.Timestamp,
-                               TakeProfit = signalForThisCandle.TakeProfit,
-                               StopLoss = signalForThisCandle.StopLoss,
-                               AmountInvested = tradeSize // Track the capital invested in this specific trade
-                           });
-                           // Reduce trading capital by the amount invested
-                           tradingCapital -= tradeSize;
-                        }
-                    }
-                }
-
-                // --- Now, check for TP/SL hits on ANY open position, including one just opened ---
                 for (int j = openPositions.Count - 1; j >= 0; j--)
                 {
                     var position = openPositions[j];
@@ -91,12 +39,12 @@ namespace Markov.Services.Engine
                     {
                         if (position.TakeProfit.HasValue && candle.High >= position.TakeProfit.Value)
                         {
-                            ClosePosition(position, position.TakeProfit.Value, candle.Timestamp, TradeOutcome.TakeProfit, ref tradingCapital, result);
+                            ClosePosition(position, position.TakeProfit.Value, candle.Timestamp, TradeOutcome.TakeProfit, ref tradingCapital, result, parameters);
                             positionClosed = true;
                         }
                         else if (position.StopLoss.HasValue && candle.Low <= position.StopLoss.Value)
                         {
-                            ClosePosition(position, position.StopLoss.Value, candle.Timestamp, TradeOutcome.StopLoss, ref tradingCapital, result);
+                            ClosePosition(position, position.StopLoss.Value, candle.Timestamp, TradeOutcome.StopLoss, ref tradingCapital, result, parameters);
                             positionClosed = true;
                         }
                     }
@@ -104,12 +52,12 @@ namespace Markov.Services.Engine
                     {
                         if (position.TakeProfit.HasValue && candle.Low <= position.TakeProfit.Value)
                         {
-                            ClosePosition(position, position.TakeProfit.Value, candle.Timestamp, TradeOutcome.TakeProfit, ref tradingCapital, result);
+                            ClosePosition(position, position.TakeProfit.Value, candle.Timestamp, TradeOutcome.TakeProfit, ref tradingCapital, result, parameters);
                             positionClosed = true;
                         }
                         else if (position.StopLoss.HasValue && candle.High >= position.StopLoss.Value)
                         {
-                            ClosePosition(position, position.StopLoss.Value, candle.Timestamp, TradeOutcome.StopLoss, ref tradingCapital, result);
+                            ClosePosition(position, position.StopLoss.Value, candle.Timestamp, TradeOutcome.StopLoss, ref tradingCapital, result, parameters);
                             positionClosed = true;
                         }
                     }
@@ -119,16 +67,34 @@ namespace Markov.Services.Engine
                         openPositions.RemoveAt(j);
                     }
                 }
+
+                var signalForThisCandle = signals.FirstOrDefault(s => s.Timestamp == candle.Timestamp);
+                if (signalForThisCandle != null)
+                {
+                    if (openPositions.Any(p => p.Symbol == signalForThisCandle.Symbol))
+                    {
+                        var positionToClose = openPositions.First(p => p.Symbol == signalForThisCandle.Symbol);
+                        if (positionToClose.Side != (signalForThisCandle.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell))
+                        {
+                             ClosePosition(positionToClose, signalForThisCandle.Price, candle.Timestamp, TradeOutcome.Closed, ref tradingCapital, result, parameters);
+                             openPositions.Remove(positionToClose);
+                        }
+                    }
+                    else if (tradingCapital > 10)
+                    {
+                        OpenPosition(signalForThisCandle, ref tradingCapital, openPositions, heldAssets, result, parameters);
+                    }
+                }
             }
 
-            // Liquidate any remaining open positions at the last candle's price
             if (openPositions.Any() && candles.Any())
             {
                 var lastPrice = candles.Last().Close;
                 foreach (var position in openPositions)
                 {
                     decimal finalValue = position.Quantity * lastPrice;
-                    tradingCapital += finalValue; // Add the liquidated value back to capital
+                    tradingCapital += finalValue;
+                    tradingCapital -= finalValue * parameters.CommissionPercentage; // Commission on liquidation
                 }
             }
             result.FinalCapital = tradingCapital;
@@ -143,25 +109,88 @@ namespace Markov.Services.Engine
             return result;
         }
 
-        private void ClosePosition(Trade position, decimal exitPrice, DateTime exitTimestamp, TradeOutcome outcome, ref decimal capital, BacktestResult result)
+        private void OpenPosition(Signal signal, ref decimal capital, List<Trade> openPositions, Dictionary<string, decimal> heldAssets, BacktestResult result, BacktestParameters parameters)
         {
-            position.ExitPrice = exitPrice;
+            decimal tradeSize;
+            if (parameters.TradeSizeMode == TradeSizeMode.PercentageOfCapital)
+            {
+                tradeSize = capital * parameters.TradeSizeValue;
+            }
+            else
+            {
+                tradeSize = parameters.TradeSizeValue;
+            }
+
+            if (tradeSize > capital)
+            {
+                tradeSize = capital;
+            }
+
+            var entryPrice = ApplySlippage(signal.Price, signal.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell, parameters.SlippagePercentage);
+            var commission = tradeSize * parameters.CommissionPercentage;
+            var quantity = tradeSize / entryPrice;
+
+            capital -= (tradeSize + commission);
+
+            if (signal.UseHoldStrategy && signal.Type == SignalType.Buy)
+            {
+                if (!heldAssets.ContainsKey(signal.Symbol))
+                {
+                    heldAssets[signal.Symbol] = 0;
+                }
+                heldAssets[signal.Symbol] += quantity;
+                result.HoldCount++;
+            }
+            else
+            {
+                openPositions.Add(new Trade
+                {
+                    Side = signal.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell,
+                    Symbol = signal.Symbol,
+                    Quantity = quantity,
+                    EntryPrice = entryPrice,
+                    EntryTimestamp = signal.Timestamp,
+                    TakeProfit = signal.TakeProfit,
+                    StopLoss = signal.StopLoss,
+                    AmountInvested = tradeSize
+                });
+            }
+        }
+
+        private void ClosePosition(Trade position, decimal exitPrice, DateTime exitTimestamp, TradeOutcome outcome, ref decimal capital, BacktestResult result, BacktestParameters parameters)
+        {
+            var actualExitPrice = ApplySlippage(exitPrice, position.Side == OrderSide.Buy ? OrderSide.Sell : OrderSide.Buy, parameters.SlippagePercentage);
+            
+            position.ExitPrice = actualExitPrice;
             position.ExitTimestamp = exitTimestamp;
             position.Outcome = outcome;
 
             decimal initialValue = position.AmountInvested;
-            decimal finalValue = exitPrice * position.Quantity;
+            decimal finalValue = actualExitPrice * position.Quantity;
+            decimal entryCommission = initialValue * parameters.CommissionPercentage;
+            decimal exitCommission = finalValue * parameters.CommissionPercentage;
             decimal pnl = (position.Side == OrderSide.Buy) ? finalValue - initialValue : initialValue - finalValue;
-
-            position.Pnl = pnl;
             
-            // Add the proceeds of the trade back to the main capital pool
-            capital += finalValue;
+            position.Pnl = pnl - entryCommission - exitCommission; // Net PNL
+            
+            capital += finalValue - exitCommission;
 
-            if (pnl > 0) result.WinCount++;
+            if (position.Pnl > 0) result.WinCount++;
             else result.LossCount++;
 
             result.Trades.Add(position);
+        }
+
+        private decimal ApplySlippage(decimal price, OrderSide side, decimal slippagePercentage)
+        {
+            if (side == OrderSide.Buy)
+            {
+                return price * (1 + slippagePercentage);
+            }
+            else // Sell
+            {
+                return price * (1 - slippagePercentage);
+            }
         }
     }
 }
