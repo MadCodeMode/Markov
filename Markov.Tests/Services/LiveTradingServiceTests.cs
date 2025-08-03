@@ -7,6 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Markov.API.Services;
 using LiveSession = Markov.Services.Models.LiveSession;
 using Markov.Services.Time;
+using Castle.Core.Logging;
+using Markov.Services.Engine;
+using Microsoft.Extensions.Logging;
 
 namespace Markov.Tests.Services;
 
@@ -19,6 +22,7 @@ public class LiveTradingServiceTests
     private readonly Mock<MarkovDbContext> _mockDbContext;
     private readonly LiveTradingService _liveTradingService;
     private readonly Mock<ITimerService> _mockTimerService;
+    private readonly Mock<ILogger<TradingEngine>> _logger;
 
 
     public LiveTradingServiceTests()
@@ -26,6 +30,7 @@ public class LiveTradingServiceTests
         _mockStrategyService = new Mock<IStrategyService>();
         _mockExchange = new Mock<IExchange>();
         _mockTimerService = new Mock<ITimerService>();
+        _logger = new Mock<ILogger<TradingEngine>>();
 
         var sessions = new List<LiveSession>();
         _mockSessionSet = new Mock<DbSet<LiveSession>>();
@@ -46,7 +51,7 @@ public class LiveTradingServiceTests
         _mockScopeFactory = new Mock<IServiceScopeFactory>();
         _mockScopeFactory.Setup(f => f.CreateScope()).Returns(mockScope.Object);
 
-        _liveTradingService = new LiveTradingService(_mockStrategyService.Object, _mockExchange.Object, _mockScopeFactory.Object, _mockTimerService.Object);
+        _liveTradingService = new LiveTradingService(_mockStrategyService.Object, _mockExchange.Object, _mockScopeFactory.Object, _mockTimerService.Object, _logger.Object);
     }
 
     [Fact]
