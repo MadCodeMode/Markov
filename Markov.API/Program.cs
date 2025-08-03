@@ -8,9 +8,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
+// --- Markov Services Registration ---
 builder.Services.AddTradingServices();
-builder.Services.AddSingleton<IStrategyService, StrategyService>();
+builder.Services.AddScoped<IStrategyService, StrategyService>();
 builder.Services.AddSingleton<ILiveTradingService, LiveTradingService>();
+builder.Services.AddHostedService<LiveSessionManager>();
+// ------------------------------------
 
 builder.Services.AddDbContext<MarkovDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -32,14 +35,14 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers(); 
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
-    dbContext.Database.Migrate(); 
+    dbContext.Database.Migrate();
 }
 
 if (app.Environment.IsDevelopment())
@@ -50,7 +53,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.MapControllers(); 
+app.MapControllers();
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
     Predicate = _ => true,

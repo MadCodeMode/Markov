@@ -1,10 +1,11 @@
 using Markov.API.Models;
+using Markov.Services;
 using Markov.Services.Filters;
 using Markov.Services.Interfaces;
+using Markov.Services.Models;
 using Markov.Services.Strategies;
 using Markov.Trading.Engine.Filters;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -13,23 +14,40 @@ namespace Markov.API.Services
 {
     public class StrategyService : IStrategyService
     {
-        private static readonly ConcurrentDictionary<Guid, IStrategy> _strategies = new ConcurrentDictionary<Guid, IStrategy>();
-        private readonly IServiceProvider _serviceProvider;
+        private readonly MarkovDbContext _context;
 
-        public StrategyService(IServiceProvider serviceProvider)
+        public StrategyService(MarkovDbContext context)
         {
-            _serviceProvider = serviceProvider;
+            _context = context;
         }
 
         public Guid CreateStrategy(CreateStrategyRequest request)
         {
-            var strategy = CreateStrategyInstance(request.StrategyName);
-            if (strategy == null)
+            var strategyConfig = new StrategyConfiguration
             {
-                throw new ArgumentException("Invalid strategy name");
+                Id = Guid.NewGuid(),
+                StrategyName = request.StrategyName,
+                FiltersJson = JsonSerializer.Serialize(request.Filters)
+            };
+
+            _context.StrategyConfigurations.Add(strategyConfig);
+            _context.SaveChanges();
+
+            return strategyConfig.Id;
+        }
+
+        public IStrategy GetStrategy(Guid strategyId)
+        {
+            var strategyConfig = _context.StrategyConfigurations.Find(strategyId);
+            if (strategyConfig == null)
+            {
+                throw new KeyNotFoundException("Strategy not found");
             }
 
-            foreach (var filterDto in request.Filters)
+            var strategy = CreateStrategyInstance(strategyConfig.StrategyName);
+            var filterDtos = JsonSerializer.Deserialize<List<FilterDto>>(strategyConfig.FiltersJson);
+
+            foreach (var filterDto in filterDtos)
             {
                 var filter = CreateFilterInstance(filterDto);
                 if (filter != null)
@@ -38,18 +56,7 @@ namespace Markov.API.Services
                 }
             }
 
-            var strategyId = Guid.NewGuid();
-            _strategies[strategyId] = strategy;
-            return strategyId;
-        }
-
-        public IStrategy GetStrategy(Guid strategyId)
-        {
-            if (_strategies.TryGetValue(strategyId, out var strategy))
-            {
-                return strategy;
-            }
-            throw new KeyNotFoundException("Strategy not found");
+            return strategy;
         }
         
         public IEnumerable<string> GetAvailableStrategies()
@@ -78,7 +85,7 @@ namespace Markov.API.Services
             return strategyName switch
             {
                 "Simple MACD Strategy" => new SimpleMacdStrategy(),
-                _ => null
+                _ => throw new ArgumentException("Invalid strategy name")
             };
         }
 

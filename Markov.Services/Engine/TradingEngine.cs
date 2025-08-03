@@ -1,74 +1,85 @@
 using Markov.Services.Enums;
 using Markov.Services.Interfaces;
 using Markov.Services.Models;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
-namespace Markov.Services.Engine;
-
-public class TradingEngine : ITradingEngine
+namespace Markov.Services.Engine
 {
-    private readonly IExchange _exchange;
-    private readonly IStrategy _strategy;
-    private readonly IEnumerable<string> _symbols;
-    private readonly TimeFrame _timeFrame;
-    private CancellationTokenSource _cancellationTokenSource;
-
-    public TradingEngine(IExchange exchange, IStrategy strategy, IEnumerable<string> symbols, TimeFrame timeFrame)
+    public class TradingEngine : ITradingEngine
     {
-        _exchange = exchange;
-        _strategy = strategy;
-        _symbols = symbols;
-        _timeFrame = timeFrame;
-    }
+        public event Action<Order> OnOrderPlaced;
 
-    public Task StartAsync()
-    {
-        _cancellationTokenSource = new CancellationTokenSource();
-        var token = _cancellationTokenSource.Token;
-        return Task.Run(async () =>
+        private readonly IExchange _exchange;
+        private readonly IStrategy _strategy;
+        private readonly IEnumerable<string> _symbols;
+        private readonly TimeFrame _timeFrame;
+        private CancellationTokenSource _cancellationTokenSource;
+
+        public TradingEngine(IExchange exchange, IStrategy strategy, IEnumerable<string> symbols, TimeFrame timeFrame)
         {
-            while (!token.IsCancellationRequested)
+            _exchange = exchange;
+            _strategy = strategy;
+            _symbols = symbols;
+            _timeFrame = timeFrame;
+        }
+
+        public Task StartAsync()
+        {
+            _cancellationTokenSource = new CancellationTokenSource();
+            var token = _cancellationTokenSource.Token;
+            return Task.Run(async () =>
             {
-                try
+                while (!token.IsCancellationRequested)
                 {
-                    var data = new Dictionary<string, IEnumerable<Candle>>();
-                    foreach (var symbol in _symbols)
+                    try
                     {
-                        var historicalData = await _exchange.GetHistoricalDataAsync(symbol, _timeFrame, DateTime.UtcNow.AddDays(-100), DateTime.UtcNow);
-                        data.Add(symbol, historicalData);
-                    }
-
-                    var signals = _strategy.GetFilteredSignals(data);
-
-                    foreach (var signal in signals)
-                    {
-                        var order = new Order
+                        var data = new Dictionary<string, IEnumerable<Candle>>();
+                        foreach (var symbol in _symbols)
                         {
-                            Symbol = signal.Symbol,
-                            Side = signal.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell,
-                            Type = OrderType.Market,
-                            Quantity = 1,
-                            // Pass the new risk management parameters to the order
-                            Price = signal.Price,
-                            StopLoss = signal.StopLoss,
-                            TakeProfit = signal.TakeProfit,
-                            UseHoldStrategy = signal.UseHoldStrategy
-                        };
-                        await _exchange.PlaceOrderAsync(order);
+                            var historicalData = await _exchange.GetHistoricalDataAsync(symbol, _timeFrame, DateTime.UtcNow.AddDays(-100), DateTime.UtcNow);
+                            data.Add(symbol, historicalData);
+                        }
+
+                        var signals = _strategy.GetFilteredSignals(data);
+
+                        foreach (var signal in signals)
+                        {
+                            var order = new Order
+                            {
+                                Symbol = signal.Symbol,
+                                Side = signal.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell,
+                                Type = OrderType.Market,
+                                Quantity = 1,
+                                Price = signal.Price,
+                                StopLoss = signal.StopLoss,
+                                TakeProfit = signal.TakeProfit,
+                                UseHoldStrategy = signal.UseHoldStrategy,
+                                Timestamp = DateTime.UtcNow
+                            };
+                            
+                            var placedOrder = await _exchange.PlaceOrderAsync(order);
+                            OnOrderPlaced?.Invoke(placedOrder);
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    // Log exception
-                }
+                    catch (Exception ex)
+                    {
+                        // Log exception
+                    }
 
-                await Task.Delay(TimeSpan.FromMinutes((int)_timeFrame), token);
-            }
-        }, token);
-    }
+                    // In a real scenario, the delay would be calculated more precisely
+                    // to align with the start of the next candle.
+                    await Task.Delay(TimeSpan.FromSeconds(10), token); // Reduced delay for demonstration
+                }
+            }, token);
+        }
 
-    public Task StopAsync()
-    {
-        _cancellationTokenSource?.Cancel();
-        return Task.CompletedTask;
+        public Task StopAsync()
+        {
+            _cancellationTokenSource?.Cancel();
+            return Task.CompletedTask;
+        }
     }
 }

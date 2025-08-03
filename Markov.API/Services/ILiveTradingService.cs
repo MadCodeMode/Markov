@@ -10,5 +10,6 @@ namespace Markov.API.Services
         void StopSession(Guid sessionId);
         LiveSessionDto GetSession(Guid sessionId);
         IEnumerable<LiveSessionDto> GetAllSessions();
+        void RestartSession(Guid sessionId, Guid strategyId, string symbol, string timeFrame);
     }
 }

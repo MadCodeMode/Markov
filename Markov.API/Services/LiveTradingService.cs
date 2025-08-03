@@ -1,4 +1,5 @@
 using Markov.API.Models;
+using Markov.Services;
 using Markov.Services.Engine;
 using Markov.Services.Enums;
 using Markov.Services.Interfaces;
@@ -11,69 +12,112 @@ namespace Markov.API.Services
 {
     public class LiveTradingService : ILiveTradingService
     {
-        private static readonly ConcurrentDictionary<Guid, (ITradingEngine Engine, LiveSessionDto Session)> _liveSessions = new();
+        private static readonly ConcurrentDictionary<Guid, ITradingEngine> _runningEngines = new();
         private readonly IStrategyService _strategyService;
         private readonly IExchange _exchange;
+        private readonly IServiceProvider _serviceProvider;
 
-        public LiveTradingService(IStrategyService strategyService, IExchange exchange)
+        public LiveTradingService(IStrategyService strategyService, IExchange exchange, IServiceProvider serviceProvider)
         {
             _strategyService = strategyService;
             _exchange = exchange;
+            _serviceProvider = serviceProvider;
         }
 
         public Guid StartSession(Guid strategyId, string symbol, string timeFrame)
         {
-            var strategy = _strategyService.GetStrategy(strategyId);
             var sessionId = Guid.NewGuid();
+            RestartSession(sessionId, strategyId, symbol, timeFrame);
+
+            using (var scope = _serviceProvider.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
+                var session = new Markov.Services.Models.LiveSession
+                {
+                    Id = sessionId,
+                    StrategyId = strategyId,
+                    Symbol = symbol,
+                    TimeFrame = timeFrame,
+                    Status = "Running",
+                    StartTime = DateTime.UtcNow
+                };
+                context.LiveSessions.Add(session);
+                context.SaveChanges();
+            }
+
+            return sessionId;
+        }
+        
+        public void RestartSession(Guid sessionId, Guid strategyId, string symbol, string timeFrame)
+        {
+            var strategy = _strategyService.GetStrategy(strategyId);
             var symbols = new List<string> { symbol };
             var tf = Enum.Parse<TimeFrame>(timeFrame, true);
 
             var engine = new TradingEngine(_exchange, strategy, symbols, tf);
-
-            var session = new LiveSessionDto
-            {
-                SessionId = sessionId,
-                StrategyId = strategyId,
-                StrategyName = strategy.Name,
-                Symbol = symbol,
-                Status = "Running",
-                StartTime = DateTime.UtcNow
-            };
-            
-            _liveSessions[sessionId] = (engine, session);
-
-            engine.StartAsync(); // Start the engine in the background
-
-            return sessionId;
+            _runningEngines[sessionId] = engine;
+            engine.StartAsync();
         }
 
         public void StopSession(Guid sessionId)
         {
-            if (_liveSessions.TryGetValue(sessionId, out var sessionInfo))
+            if (_runningEngines.TryRemove(sessionId, out var engine))
             {
-                sessionInfo.Engine.StopAsync();
-                sessionInfo.Session.Status = "Stopped";
+                engine.StopAsync();
             }
-            else
+
+            using (var scope = _serviceProvider.CreateScope())
             {
-                throw new KeyNotFoundException("Live session not found.");
+                var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
+                var session = context.LiveSessions.Find(sessionId);
+                if (session != null)
+                {
+                    session.Status = "Stopped";
+                    context.SaveChanges();
+                }
             }
         }
 
         public LiveSessionDto GetSession(Guid sessionId)
         {
-            if (_liveSessions.TryGetValue(sessionId, out var sessionInfo))
+            using (var scope = _serviceProvider.CreateScope())
             {
-                // In a real application, you'd update PnL and trades from a persistent source
-                // For this example, we return the session DTO as is.
-                return sessionInfo.Session;
+                var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
+                var session = context.LiveSessions.Find(sessionId);
+
+                if (session == null)
+                {
+                    throw new KeyNotFoundException("Live session not found.");
+                }
+
+                return new LiveSessionDto
+                {
+                    SessionId = session.Id,
+                    StrategyId = session.StrategyId,
+                    Symbol = session.Symbol,
+                    Status = session.Status,
+                    StartTime = session.StartTime,
+                    StrategyName = _strategyService.GetStrategy(session.StrategyId).Name
+                };
             }
-            throw new KeyNotFoundException("Live session not found.");
         }
 
         public IEnumerable<LiveSessionDto> GetAllSessions()
         {
-            return _liveSessions.Values.Select(s => s.Session);
+            using (var scope = _serviceProvider.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
+                var sessions = context.LiveSessions.ToList();
+                return sessions.Select(session => new LiveSessionDto
+                {
+                    SessionId = session.Id,
+                    StrategyId = session.StrategyId,
+                    Symbol = session.Symbol,
+                    Status = session.Status,
+                    StartTime = session.StartTime,
+                    StrategyName = _strategyService.GetStrategy(session.StrategyId).Name
+                });
+            }
         }
     }
 }
