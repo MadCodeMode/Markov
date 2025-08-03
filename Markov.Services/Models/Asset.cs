@@ -1,4 +1,6 @@
 
+using Markov.Services.Enums;
+
 namespace Markov.Services.Models;
 
 public class Asset

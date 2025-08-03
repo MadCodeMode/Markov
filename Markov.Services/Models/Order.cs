@@ -1,0 +1,16 @@
+namespace Markov.Services.Models;
+
+public class Order
+{
+    public string Id { get; set; }
+    public string Symbol { get; set; }
+    public OrderType Type { get; set; }
+    public OrderSide Side { get; set; }
+    public decimal Quantity { get; set; }
+    public decimal Price { get; set; }
+    public OrderStatus Status { get; set; }
+    public DateTime Timestamp { get; set; }
+    public decimal? StopLoss { get; set; }
+    public decimal? TakeProfit { get; set; }
+    public bool UseHoldStrategy { get; set; } = false;
+}
