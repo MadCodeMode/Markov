@@ -38,7 +38,7 @@ namespace Markov.Services.Engine
         {
             _cancellationTokenSource = new CancellationTokenSource();
             var token = _cancellationTokenSource.Token;
-            return Task.Run(async () =>
+            Task.Run(async () =>
             {
                 while (!token.IsCancellationRequested)
                 {
@@ -82,6 +82,7 @@ namespace Markov.Services.Engine
                     await _timerService.Delay(TimeSpan.FromSeconds(10), token);
                 }
             }, token);
+            return Task.CompletedTask;
         }
 
         public Task StopAsync()

@@ -21,7 +21,7 @@ namespace Markov.Tests.Engine
             _mockExchange = new Mock<IExchange>();
             _mockStrategy = new Mock<IStrategy>();
             _mockTimerService = new Mock<ITimerService>();
-            _symbols = new List<string> { "BTCUSDT" };
+            _symbols = new List<string> { "BTCUSDT", "ETHUSDT" };
 
             _tradingEngine = new TradingEngine(
                 _mockExchange.Object,
