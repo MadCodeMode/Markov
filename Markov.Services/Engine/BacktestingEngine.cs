@@ -37,27 +37,27 @@ namespace Markov.Services.Engine
 
                     if (position.Side == OrderSide.Buy)
                     {
-                        if (position.TakeProfit.HasValue && candle.High >= position.TakeProfit.Value)
-                        {
-                            ClosePosition(position, position.TakeProfit.Value, candle.Timestamp, TradeOutcome.TakeProfit, ref tradingCapital, result, parameters);
-                            positionClosed = true;
-                        }
-                        else if (position.StopLoss.HasValue && candle.Low <= position.StopLoss.Value)
+                        if (position.StopLoss.HasValue && candle.Low <= position.StopLoss.Value)
                         {
                             ClosePosition(position, position.StopLoss.Value, candle.Timestamp, TradeOutcome.StopLoss, ref tradingCapital, result, parameters);
+                            positionClosed = true;
+                        }
+                        else if (position.TakeProfit.HasValue && candle.High >= position.TakeProfit.Value)
+                        {
+                            ClosePosition(position, position.TakeProfit.Value, candle.Timestamp, TradeOutcome.TakeProfit, ref tradingCapital, result, parameters);
                             positionClosed = true;
                         }
                     }
                     else // Sell side
                     {
-                        if (position.TakeProfit.HasValue && candle.Low <= position.TakeProfit.Value)
-                        {
-                            ClosePosition(position, position.TakeProfit.Value, candle.Timestamp, TradeOutcome.TakeProfit, ref tradingCapital, result, parameters);
-                            positionClosed = true;
-                        }
-                        else if (position.StopLoss.HasValue && candle.High >= position.StopLoss.Value)
+                        if (position.StopLoss.HasValue && candle.High >= position.StopLoss.Value)
                         {
                             ClosePosition(position, position.StopLoss.Value, candle.Timestamp, TradeOutcome.StopLoss, ref tradingCapital, result, parameters);
+                            positionClosed = true;
+                        }
+                        else if (position.TakeProfit.HasValue && candle.Low <= position.TakeProfit.Value)
+                        {
+                            ClosePosition(position, position.TakeProfit.Value, candle.Timestamp, TradeOutcome.TakeProfit, ref tradingCapital, result, parameters);
                             positionClosed = true;
                         }
                     }

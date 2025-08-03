@@ -297,5 +297,70 @@ namespace Markov.Tests.Engine
             // Final Capital: 8999 + 1098.90 - 1.0989 = 10096.8011
             result.FinalCapital.Should().BeApproximately(10096.80m, 0.01m);
         }
+
+        [Fact]
+        public async Task RunAsync_NoCandleData_ShouldReturnInitialCapital()
+        {
+            var parameters = CreateDefaultParameters();
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Candle>());
+            _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>()))
+                .Returns(new List<Signal>());
+
+            var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
+
+            result.FinalCapital.Should().Be(parameters.InitialCapital);
+            result.Trades.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task RunAsync_SignalOnLastCandle_ShouldLiquidateAtClose()
+        {
+            var parameters = CreateDefaultParameters();
+            var lastCandleTime = parameters.To.Date;
+            var candles = new List<Candle>
+            {
+                new Candle { Timestamp = lastCandleTime.AddDays(-1), Close = 100 },
+                new Candle { Timestamp = lastCandleTime, Close = 105 }
+            };
+            var signals = new List<Signal>
+            {
+                new Signal { Type = SignalType.Buy, Timestamp = lastCandleTime, Price = 105, Symbol = _symbol }
+            };
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(candles);
+            _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>())).Returns(signals);
+
+            var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
+
+            // Initial: 10000. Trade size: 1000. Liquidated at 105.
+            // Final capital: 9000 (remaining) + 1000 (liquidated) = 10000
+            result.FinalCapital.Should().Be(10000);
+            result.Trades.Should().BeEmpty(); // No closed trades
+        }
+
+        [Fact]
+        public async Task RunAsync_TpAndSlHitOnSameCandle_ShouldPrioritizeStopLoss()
+        {
+            var parameters = CreateDefaultParameters();
+            var entryTime = parameters.From.AddDays(1);
+            var exitTime = parameters.From.AddDays(2);
+            var candles = new List<Candle>
+            {
+                new Candle { Timestamp = entryTime, Close = 100 },
+                new Candle { Timestamp = exitTime, Close = 100, High = 110, Low = 90 } // High hits TP, Low hits SL
+            };
+            var signals = new List<Signal>
+            {
+                new Signal { Type = SignalType.Buy, Timestamp = entryTime, Price = 100, Symbol = _symbol, TakeProfit = 110, StopLoss = 90 }
+            };
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(candles);
+            _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>())).Returns(signals);
+
+            var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
+
+            result.Trades.Should().HaveCount(1);
+            result.Trades.First().Outcome.Should().Be(TradeOutcome.StopLoss);
+            result.Trades.First().ExitPrice.Should().Be(90);
+        }
     }
 }
