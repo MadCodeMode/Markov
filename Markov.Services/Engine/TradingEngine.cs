@@ -68,12 +68,23 @@ namespace Markov.Services.Engine
 
         private async Task TradingLoopAsync(CancellationToken token)
         {
+            var data = new Dictionary<string, List<Candle>>();
             try
             {
-                var data = new Dictionary<string, List<Candle>>();
+                // Initial data fetch. If this fails, the engine should not start.
+                await UpdateHistoricalDataAsync(data);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "The TradingEngine failed to initialize and will not start.");
+                return;
+            }
 
-                while (!token.IsCancellationRequested)
+            while (!token.IsCancellationRequested)
+            {
+                try
                 {
+                    // Subsequent updates are within the loop's try-catch.
                     await UpdateHistoricalDataAsync(data);
 
                     var signals = _strategy.GetFilteredSignals(data.ToDictionary(kvp => kvp.Key, kvp => (IEnumerable<Candle>)kvp.Value));
@@ -91,7 +102,6 @@ namespace Markov.Services.Engine
                             UseHoldStrategy = signal.UseHoldStrategy
                         };
 
-                        // Apply hold strategy: only set SL if UseHoldStrategy is false for Buy orders
                         if (signal.Type == SignalType.Buy && signal.UseHoldStrategy)
                         {
                             order.StopLoss = null;
@@ -106,17 +116,18 @@ namespace Markov.Services.Engine
                         var placedOrder = await _exchange.PlaceOrderAsync(order);
                         OnOrderPlaced?.Invoke(placedOrder);
                     }
-                    
-                    await _timerService.Delay(_tradingLoopInterval, token);
                 }
-            }
-            catch (TaskCanceledException)
-            {
-                // This is expected on shutdown, so we can ignore it.
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An unexpected error occurred in the trading loop.");
+                catch (TaskCanceledException)
+                {
+                    // This is expected on shutdown, so we can ignore it.
+                    break; // Exit the loop cleanly
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "An unexpected error occurred in the trading loop. The loop will continue.");
+                }
+                
+                await _timerService.Delay(_tradingLoopInterval, token);
             }
         }
 

@@ -105,19 +105,22 @@ namespace Markov.Tests.Engine
             _mockTimerService.Setup(t => t.Delay(It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
                 .Callback((TimeSpan ts, CancellationToken ct) => {
                     callCount++;
-                    tcs.TrySetResult();
+                    if(callCount == 1)
+                    {
+                        tcs.TrySetResult();
+                    }
                 })
                 .Returns(async (TimeSpan ts, CancellationToken ct) => {
-                    // This will keep the task alive until it's cancelled.
-                    await Task.Delay(Timeout.Infinite, ct);
+                    var tcs = new TaskCompletionSource<bool>();
+                    using (ct.Register(() => tcs.SetResult(true)))
+                    {
+                        await tcs.Task;
+                    }
                 });
 
             // Act
             await _tradingEngine.StartAsync();
-
-            // Wait for the first loop to hit the delay
-            await tcs.Task;
-
+            await tcs.Task; // Wait for the first loop to start its delay
             await _tradingEngine.StopAsync();
 
             // Give a moment for any potential extra calls to come through
@@ -158,7 +161,7 @@ namespace Markov.Tests.Engine
         }
 
         [Fact]
-        public async Task WhenExchangeThrowsException_ShouldLogAndContinue()
+        public async Task WhenInitialFetchFails_ShouldLogAndNotLoop()
         {
             // Arrange
             var exception = new InvalidOperationException("Exchange is down");
@@ -175,10 +178,49 @@ namespace Markov.Tests.Engine
                 x => x.Log(
                     LogLevel.Error,
                     It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("The TradingEngine failed to initialize")),
+                    exception,
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
+            
+            // Verify the loop did not continue
+            _mockTimerService.Verify(t => t.Delay(It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+    [Fact]
+        public async Task WhenUpdateFails_ShouldLogAndContinueLoop()
+        {
+            // Arrange
+            var exception = new InvalidOperationException("Exchange is down for an update");
+            var initialCandles = new List<Candle> { new Candle { Timestamp = DateTime.UtcNow.AddHours(-1) } };
+            var callCount = 0;
+
+            // Succeed on the first call (initial fetch)
+            _mockExchange.SetupSequence(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+                .ReturnsAsync(initialCandles)
+                .ThrowsAsync(exception); // Fail on the second call (update fetch)
+
+            _mockTimerService.Setup(t => t.Delay(It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+                .Callback(() => callCount++)
+                .Returns(Task.CompletedTask);
+
+            // Act
+            await _tradingEngine.StartAsync();
+            await Task.Delay(100); // Allow time for a few loops
+            await _tradingEngine.StopAsync();
+
+            // Assert
+            // Verify that the exception was logged
+            _mockLogger.Verify(
+                x => x.Log(
+                    LogLevel.Error,
+                    It.IsAny<EventId>(),
                     It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("An unexpected error occurred")),
                     exception,
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.Once);
+
+            // Verify that the loop continued after the exception
+            callCount.Should().BeGreaterThan(1);
         }
     }
 }

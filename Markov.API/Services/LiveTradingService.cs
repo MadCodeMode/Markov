@@ -3,8 +3,10 @@ using Markov.Services;
 using Markov.Services.Engine;
 using Markov.Services.Enums;
 using Markov.Services.Interfaces;
+using Markov.Services.Models;
 using Markov.Services.Time;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 
 namespace Markov.API.Services;
@@ -17,19 +19,22 @@ public class LiveTradingService : ILiveTradingService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ITimerService _timerService;
     private readonly ILogger<TradingEngine> _logger;
+    private readonly TradingSettings _tradingSettings;
 
     public LiveTradingService(
         IStrategyService strategyService,
         IExchange exchange,
         IServiceScopeFactory scopeFactory,
         ITimerService timerService,
-        ILogger<TradingEngine> logger)
+        ILogger<TradingEngine> logger,
+        IOptions<TradingSettings> tradingSettings)
     {
         _strategyService = strategyService;
         _exchange = exchange;
         _scopeFactory = scopeFactory;
         _timerService = timerService;
         _logger = logger;
+        _tradingSettings = tradingSettings.Value;
     }
 
     public Guid StartSession(Guid strategyId, string symbol, string timeFrame)
@@ -39,7 +44,15 @@ public class LiveTradingService : ILiveTradingService
         var symbols = new List<string> { symbol };
         var tf = Enum.Parse<TimeFrame>(timeFrame, true);
 
-        var engine = new TradingEngine(_exchange, strategy, symbols, tf, _timerService, _logger);
+        var engine = new TradingEngine(
+            _exchange, 
+            strategy, 
+            symbols, 
+            tf, 
+            _timerService, 
+            _logger, 
+            TimeSpan.FromSeconds(_tradingSettings.TradingLoopIntervalSeconds)
+        );
 
         var session = new Markov.Services.Models.LiveSession
         {
@@ -139,7 +152,15 @@ public class LiveTradingService : ILiveTradingService
         var symbols = new List<string> { symbol };
         var tf = Enum.Parse<TimeFrame>(timeFrame, true);
 
-        var engine = new TradingEngine(_exchange, strategy, symbols, tf, _timerService, _logger);
+        var engine = new TradingEngine(
+            _exchange, 
+            strategy, 
+            symbols, 
+            tf, 
+            _timerService, 
+            _logger,
+            TimeSpan.FromSeconds(_tradingSettings.TradingLoopIntervalSeconds)
+            );
         _runningEngines[sessionId] = engine;
         engine.StartAsync();
     }

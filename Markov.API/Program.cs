@@ -1,13 +1,18 @@
 using HealthChecks.UI.Client;
 using Markov.API.Services;
 using Markov.Services;
+using Markov.Services.Models;
 using Markov.Services.Time;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
+
+// --- Configuration ---
+builder.Services.Configure<TradingSettings>(builder.Configuration.GetSection("TradingSettings"));
 
 // --- Markov Services Registration ---
 builder.Services.AddTradingServices();
