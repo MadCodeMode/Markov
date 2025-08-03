@@ -70,15 +70,13 @@ namespace Markov.Services.Engine
         {
             try
             {
-                var data = await InitializeHistoricalDataAsync();
+                var data = new Dictionary<string, List<Candle>>();
 
                 while (!token.IsCancellationRequested)
                 {
-                    await _timerService.Delay(_tradingLoopInterval, token);
+                    await UpdateHistoricalDataAsync(data);
 
-                    await FetchLatestDataAsync(data);
-
-                    var signals = _strategy.GetFilteredSignals(data);
+                    var signals = _strategy.GetFilteredSignals(data.ToDictionary(kvp => kvp.Key, kvp => (IEnumerable<Candle>)kvp.Value));
 
                     foreach (var signal in signals)
                     {
@@ -89,20 +87,27 @@ namespace Markov.Services.Engine
                             Type = OrderType.Market,
                             Quantity = 1, // Simplified for now
                             Price = signal.Price,
-                            Timestamp = DateTime.UtcNow
+                            Timestamp = DateTime.UtcNow,
+                            UseHoldStrategy = signal.UseHoldStrategy
                         };
 
-                        // Apply hold strategy: only set SL/TP if UseHoldStrategy is false
-                        if (!signal.UseHoldStrategy)
+                        // Apply hold strategy: only set SL if UseHoldStrategy is false for Buy orders
+                        if (signal.Type == SignalType.Buy && signal.UseHoldStrategy)
+                        {
+                            order.StopLoss = null;
+                            order.TakeProfit = signal.TakeProfit;
+                        }
+                        else
                         {
                             order.StopLoss = signal.StopLoss;
                             order.TakeProfit = signal.TakeProfit;
                         }
-                        // For long trades with UseHoldStrategy, SL is intentionally omitted.
 
                         var placedOrder = await _exchange.PlaceOrderAsync(order);
                         OnOrderPlaced?.Invoke(placedOrder);
                     }
+                    
+                    await _timerService.Delay(_tradingLoopInterval, token);
                 }
             }
             catch (TaskCanceledException)
@@ -115,42 +120,43 @@ namespace Markov.Services.Engine
             }
         }
 
-        private async Task<Dictionary<string, IEnumerable<Candle>>> InitializeHistoricalDataAsync()
+        private async Task UpdateHistoricalDataAsync(Dictionary<string, List<Candle>> data)
         {
-            var data = new Dictionary<string, IEnumerable<Candle>>();
-            _logger.LogInformation("Initializing historical data...");
             foreach (var symbol in _symbols)
             {
-                var historicalData = await _exchange.GetHistoricalDataAsync(symbol, _timeFrame, DateTime.UtcNow.AddDays(-100), DateTime.UtcNow);
-                data.Add(symbol, new List<Candle>(historicalData));
-                _logger.LogInformation($"Fetched {((List<Candle>)data[symbol]).Count} initial candles for {symbol}.");
-            }
-            return data;
-        }
+                DateTime fromDate;
+                bool isInitialFetch = !data.ContainsKey(symbol) || !data[symbol].Any();
 
-        private async Task FetchLatestDataAsync(Dictionary<string, IEnumerable<Candle>> data)
-        {
-            _logger.LogDebug("Fetching latest candle data...");
-            // Fetch a small, recent window to get the latest candle(s).
-            var since = DateTime.UtcNow.AddMinutes(-2 * (int)_timeFrame);
-
-            foreach (var symbol in _symbols)
-            {
-                var latestCandles = await _exchange.GetHistoricalDataAsync(symbol, _timeFrame, since, DateTime.UtcNow);
-                var candleList = (List<Candle>)data[symbol];
-                var lastTimestamp = candleList.LastOrDefault()?.Timestamp;
-
-                foreach (var newCandle in latestCandles)
+                if (isInitialFetch)
                 {
-                    if (lastTimestamp == null || newCandle.Timestamp > lastTimestamp)
+                    fromDate = DateTime.UtcNow.AddDays(-100); // Large window for initial fetch
+                    data[symbol] = new List<Candle>();
+                    _logger.LogInformation($"Performing initial data fetch for {symbol}...");
+                }
+                else
+                {
+                    // Fetch data since the last candle, adding a 1-second buffer.
+                    fromDate = data[symbol].Max(c => c.Timestamp).AddSeconds(1);
+                }
+
+                var newCandles = await _exchange.GetHistoricalDataAsync(symbol, _timeFrame, fromDate, DateTime.UtcNow);
+
+                if (newCandles.Any())
+                {
+                    var existingCandles = data[symbol].ToHashSet();
+                    var addedCount = 0;
+                    foreach (var candle in newCandles)
                     {
-                        candleList.Add(newCandle);
-                        _logger.LogDebug($"Added new candle for {symbol} at {newCandle.Timestamp}.");
+                        if (existingCandles.Add(candle))
+                        {
+                            data[symbol].Add(candle);
+                            addedCount++;
+                        }
                     }
-                    else if (newCandle.Timestamp == lastTimestamp)
+                    if (addedCount > 0)
                     {
-                        // Update the last candle if it's still open
-                        candleList[candleList.Count - 1] = newCandle;
+                        data[symbol] = data[symbol].OrderBy(c => c.Timestamp).ToList();
+                        _logger.LogInformation($"Fetched and added {addedCount} new candle(s) for {symbol}.");
                     }
                 }
             }

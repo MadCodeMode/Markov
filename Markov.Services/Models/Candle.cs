@@ -1,6 +1,6 @@
 namespace Markov.Services.Models;
 
-public class Candle
+public record Candle
 {
     public DateTime Timestamp { get; set; }
     public decimal Open { get; set; }
