@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Markov.API.Controllers
@@ -63,7 +64,7 @@ namespace Markov.API.Controllers
         }
 
         [HttpPost("backtest")]
-        public async Task<IActionResult> RunBacktest([FromBody] BacktestRequest request)
+        public async Task<IActionResult> RunBacktest([FromBody] BacktestRequest request, CancellationToken cancellationToken)
         {
             if (request == null)
             {
@@ -84,7 +85,7 @@ namespace Markov.API.Controllers
                 };
 
                 var result = await _backtestingEngine.RunAsync(strategy, parameters);
-                var historicalData = await _exchange.GetHistoricalDataAsync(parameters.Symbol, parameters.TimeFrame, parameters.From, parameters.To);
+                var historicalData = await _exchange.GetHistoricalDataAsync(parameters.Symbol, parameters.TimeFrame, parameters.From, parameters.To, cancellationToken);
 
                 var equityCurveData = new List<ChartDataDto>();
                 var runningCapital = result.InitialCapital;

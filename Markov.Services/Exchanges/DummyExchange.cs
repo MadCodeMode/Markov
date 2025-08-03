@@ -10,7 +10,7 @@ public class DummyExchange : IExchange
     public Task<Order> GetOrderAsync(string orderId) => throw new NotImplementedException();
     public Task<Order> PlaceOrderAsync(Order order) => Task.FromResult(order);
 
-    public Task<IEnumerable<Candle>> GetHistoricalDataAsync(string symbol, TimeFrame timeFrame, DateTime from, DateTime to)
+    public Task<IEnumerable<Candle>> GetHistoricalDataAsync(string symbol, TimeFrame timeFrame, DateTime from, DateTime to, CancellationToken cancellationToken)
     {
         var candles = new List<Candle>();
         var date = from;

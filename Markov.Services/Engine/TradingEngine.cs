@@ -72,7 +72,7 @@ namespace Markov.Services.Engine
             try
             {
                 // Initial data fetch. If this fails, the engine should not start.
-                await UpdateHistoricalDataAsync(data);
+                await UpdateHistoricalDataAsync(data, token);
             }
             catch (Exception ex)
             {
@@ -85,7 +85,7 @@ namespace Markov.Services.Engine
                 try
                 {
                     // Subsequent updates are within the loop's try-catch.
-                    await UpdateHistoricalDataAsync(data);
+                    await UpdateHistoricalDataAsync(data, token);
 
                     var signals = _strategy.GetFilteredSignals(data.ToDictionary(kvp => kvp.Key, kvp => (IEnumerable<Candle>)kvp.Value));
 
@@ -131,7 +131,7 @@ namespace Markov.Services.Engine
             }
         }
 
-        private async Task UpdateHistoricalDataAsync(Dictionary<string, List<Candle>> data)
+        private async Task UpdateHistoricalDataAsync(Dictionary<string, List<Candle>> data, CancellationToken token)
         {
             foreach (var symbol in _symbols)
             {
@@ -150,7 +150,7 @@ namespace Markov.Services.Engine
                     fromDate = data[symbol].Max(c => c.Timestamp).AddSeconds(1);
                 }
 
-                var newCandles = await _exchange.GetHistoricalDataAsync(symbol, _timeFrame, fromDate, DateTime.UtcNow);
+                var newCandles = await _exchange.GetHistoricalDataAsync(symbol, _timeFrame, fromDate, DateTime.UtcNow, token);
 
                 if (newCandles.Any())
                 {

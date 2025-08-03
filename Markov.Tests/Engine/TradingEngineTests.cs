@@ -42,7 +42,7 @@ namespace Markov.Tests.Engine
             );
 
             // Setup mocks for successful runs
-            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
                          .ReturnsAsync(new List<Candle> { new Candle { Timestamp = DateTime.UtcNow } });
             _mockTimerService.Setup(t => t.Delay(It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
                              .Returns(Task.CompletedTask);
@@ -65,7 +65,7 @@ namespace Markov.Tests.Engine
 
             // Assert
             // Verify initial historical data fetch
-            _mockExchange.Verify(e => e.GetHistoricalDataAsync("BTCUSDT", It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()), Times.AtLeastOnce());
+            _mockExchange.Verify(e => e.GetHistoricalDataAsync("BTCUSDT", It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce());
             // Verify that the strategy was called
             _mockStrategy.Verify(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>()), Times.AtLeastOnce());
         }
@@ -165,7 +165,7 @@ namespace Markov.Tests.Engine
         {
             // Arrange
             var exception = new InvalidOperationException("Exchange is down");
-            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(exception);
 
             // Act
@@ -195,7 +195,7 @@ namespace Markov.Tests.Engine
             var callCount = 0;
 
             // Succeed on the first call (initial fetch)
-            _mockExchange.SetupSequence(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            _mockExchange.SetupSequence(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(initialCandles)
                 .ThrowsAsync(exception); // Fail on the second call (update fetch)
 

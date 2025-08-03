@@ -29,10 +29,10 @@ namespace Markov.Services.Exchanges
             }
         }
 
-        public async Task<IEnumerable<Candle>> GetHistoricalDataAsync(string symbol, TimeFrame timeFrame, DateTime from, DateTime to)
+        public async Task<IEnumerable<Candle>> GetHistoricalDataAsync(string symbol, TimeFrame timeFrame, DateTime from, DateTime to, CancellationToken cancellationToken)
         {
             var klineInterval = ConvertTimeFrameToKlineInterval(timeFrame);
-            var result = await _client.SpotApi.ExchangeData.GetKlinesAsync(symbol, klineInterval, from, to, 1000);
+            var result = await _client.SpotApi.ExchangeData.GetKlinesAsync(symbol, klineInterval, from, to, 1000, cancellationToken);
 
             if (!result.Success)
             {

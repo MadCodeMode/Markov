@@ -55,7 +55,7 @@ namespace Markov.Tests.Engine
                 new Signal { Type = SignalType.Buy, Timestamp = entryTime, Price = 100, Symbol = _symbol },
                 new Signal { Type = SignalType.Sell, Timestamp = exitTime, Price = 110, Symbol = _symbol }
             };
-            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>())).ReturnsAsync(candles);
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(candles);
             _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>())).Returns(signals);
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
@@ -84,7 +84,7 @@ namespace Markov.Tests.Engine
                 new Signal { Type = SignalType.Buy, Timestamp = entryTime, Price = 100, Symbol = _symbol },
                 new Signal { Type = SignalType.Sell, Timestamp = exitTime, Price = 90, Symbol = _symbol }
             };
-            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>())).ReturnsAsync(candles);
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(candles);
             _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>())).Returns(signals);
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
@@ -110,7 +110,7 @@ namespace Markov.Tests.Engine
             {
                 new Signal { Type = SignalType.Buy, Timestamp = entryTime, Price = 100, Symbol = _symbol, TakeProfit = 110 }
             };
-            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>())).ReturnsAsync(candles);
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(candles);
             _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>())).Returns(signals);
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
@@ -134,7 +134,7 @@ namespace Markov.Tests.Engine
             {
                 new Signal { Type = SignalType.Buy, Timestamp = entryTime, Price = 100, Symbol = _symbol, StopLoss = 90 }
             };
-            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>())).ReturnsAsync(candles);
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(candles);
             _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>())).Returns(signals);
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
@@ -159,7 +159,7 @@ namespace Markov.Tests.Engine
             {
                 new Signal { Type = SignalType.Buy, Timestamp = entryTime, Price = 100, Symbol = _symbol, UseHoldStrategy = true }
             };
-            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>())).ReturnsAsync(candles);
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(candles);
             _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>())).Returns(signals);
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
@@ -187,7 +187,7 @@ namespace Markov.Tests.Engine
             {
                 new Signal { Type = SignalType.Buy, Timestamp = entryTime, Price = 100, Symbol = _symbol }
             };
-            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>())).ReturnsAsync(candles);
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(candles);
             _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>())).Returns(signals);
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);

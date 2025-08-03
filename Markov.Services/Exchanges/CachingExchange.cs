@@ -17,14 +17,14 @@ public class CachingExchange : IExchange
         Directory.CreateDirectory(_cacheDirectory);
     }
 
-    public async Task<IEnumerable<Candle>> GetHistoricalDataAsync(string symbol, TimeFrame timeFrame, DateTime from, DateTime to)
+    public async Task<IEnumerable<Candle>> GetHistoricalDataAsync(string symbol, TimeFrame timeFrame, DateTime from, DateTime to, CancellationToken cancellationToken)
     {
         var fileName = GetCacheFileName(symbol, timeFrame, from, to);
         var filePath = Path.Combine(_cacheDirectory, fileName);
 
         if (File.Exists(filePath))
         {
-            var json = await File.ReadAllTextAsync(filePath);
+            var json = await File.ReadAllTextAsync(filePath, cancellationToken);
             var candles = JsonSerializer.Deserialize<List<Candle>>(json);
             if (candles != null && candles.Any() && candles.First().Timestamp <= from && candles.Last().Timestamp >= to)
             {
@@ -34,13 +34,13 @@ public class CachingExchange : IExchange
         }
 
         Console.WriteLine($"Fetching {symbol} data from exchange.");
-        var freshData = await _exchange.GetHistoricalDataAsync(symbol, timeFrame, from, to);
+        var freshData = await _exchange.GetHistoricalDataAsync(symbol, timeFrame, from, to, cancellationToken);
         var freshDataList = freshData.ToList();
 
         if (freshDataList.Any())
         {
             var json = JsonSerializer.Serialize(freshDataList);
-            await File.WriteAllTextAsync(filePath, json);
+            await File.WriteAllTextAsync(filePath, json, cancellationToken);
         }
 
         return freshDataList;

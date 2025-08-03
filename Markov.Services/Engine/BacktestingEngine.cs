@@ -12,7 +12,7 @@ namespace Markov.Services.Engine
     {
         public async Task<BacktestResult> RunAsync(IStrategy strategy, BacktestParameters parameters)
         {
-            var data = await parameters.Exchange.GetHistoricalDataAsync(parameters.Symbol, parameters.TimeFrame, parameters.From, parameters.To);
+            var data = await parameters.Exchange.GetHistoricalDataAsync(parameters.Symbol, parameters.TimeFrame, parameters.From, parameters.To, CancellationToken.None);
             var candles = data.ToList();
             var signals = strategy.GetFilteredSignals(new Dictionary<string, IEnumerable<Candle>> { { parameters.Symbol, candles } }).ToList();
 
