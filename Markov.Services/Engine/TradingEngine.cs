@@ -1,6 +1,7 @@
 using Markov.Services.Enums;
 using Markov.Services.Interfaces;
 using Markov.Services.Models;
+using Markov.Services.Time;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -16,14 +17,21 @@ namespace Markov.Services.Engine
         private readonly IStrategy _strategy;
         private readonly IEnumerable<string> _symbols;
         private readonly TimeFrame _timeFrame;
+        private readonly ITimerService _timerService;
         private CancellationTokenSource _cancellationTokenSource;
 
-        public TradingEngine(IExchange exchange, IStrategy strategy, IEnumerable<string> symbols, TimeFrame timeFrame)
+        public TradingEngine(
+            IExchange exchange,
+            IStrategy strategy,
+            IEnumerable<string> symbols,
+            TimeFrame timeFrame,
+            ITimerService timerService)
         {
             _exchange = exchange;
             _strategy = strategy;
             _symbols = symbols;
             _timeFrame = timeFrame;
+            _timerService = timerService;
         }
 
         public Task StartAsync()
@@ -59,7 +67,7 @@ namespace Markov.Services.Engine
                                 UseHoldStrategy = signal.UseHoldStrategy,
                                 Timestamp = DateTime.UtcNow
                             };
-                            
+
                             var placedOrder = await _exchange.PlaceOrderAsync(order);
                             OnOrderPlaced?.Invoke(placedOrder);
                         }
@@ -71,7 +79,7 @@ namespace Markov.Services.Engine
 
                     // In a real scenario, the delay would be calculated more precisely
                     // to align with the start of the next candle.
-                    await Task.Delay(TimeSpan.FromSeconds(10), token); // Reduced delay for demonstration
+                    await _timerService.Delay(TimeSpan.FromSeconds(10), token);
                 }
             }, token);
         }

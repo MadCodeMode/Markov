@@ -3,93 +3,120 @@ using Markov.Services;
 using Markov.Services.Engine;
 using Markov.Services.Enums;
 using Markov.Services.Interfaces;
-using System;
+using Markov.Services.Time;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 
-namespace Markov.API.Services
+namespace Markov.API.Services;
+
+public class LiveTradingService : ILiveTradingService
 {
-    public class LiveTradingService : ILiveTradingService
-    {
-        private static readonly ConcurrentDictionary<Guid, ITradingEngine> _runningEngines = new();
-        private readonly IStrategyService _strategyService;
-        private readonly IExchange _exchange;
-        private readonly IServiceProvider _serviceProvider;
+    private static readonly ConcurrentDictionary<Guid, ITradingEngine> _runningEngines = new();
+    private readonly IStrategyService _strategyService;
+    private readonly IExchange _exchange;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ITimerService _timerService;
 
-        public LiveTradingService(IStrategyService strategyService, IExchange exchange, IServiceProvider serviceProvider)
+    public LiveTradingService(
+        IStrategyService strategyService,
+        IExchange exchange,
+        IServiceScopeFactory scopeFactory,
+        ITimerService timerService)
+    {
+        _strategyService = strategyService;
+        _exchange = exchange;
+        _scopeFactory = scopeFactory;
+        _timerService = timerService;
+    }
+
+    public Guid StartSession(Guid strategyId, string symbol, string timeFrame)
+    {
+        var strategy = _strategyService.GetStrategy(strategyId);
+        var sessionId = Guid.NewGuid();
+        var symbols = new List<string> { symbol };
+        var tf = Enum.Parse<TimeFrame>(timeFrame, true);
+
+        var engine = new TradingEngine(_exchange, strategy, symbols, tf, _timerService);
+
+        var session = new Markov.Services.Models.LiveSession
         {
-            _strategyService = strategyService;
-            _exchange = exchange;
-            _serviceProvider = serviceProvider;
+            Id = sessionId,
+            StrategyId = strategyId,
+            Symbol = symbol,
+            TimeFrame = timeFrame,
+            Status = "Running",
+            StartTime = DateTime.UtcNow
+        };
+
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
+            context.LiveSessions.Add(session);
+            context.SaveChanges();
         }
 
-        public Guid StartSession(Guid strategyId, string symbol, string timeFrame)
-        {
-            var sessionId = Guid.NewGuid();
-            RestartSession(sessionId, strategyId, symbol, timeFrame);
+        _runningEngines[sessionId] = engine;
+        engine.StartAsync();
 
-            using (var scope = _serviceProvider.CreateScope())
+        return sessionId;
+    }
+
+    public void StopSession(Guid sessionId)
+    {
+        if (_runningEngines.TryRemove(sessionId, out var engine))
+        {
+            engine.StopAsync();
+        }
+
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
+            var session = context.LiveSessions.Find(sessionId);
+            if (session != null)
             {
-                var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
-                var session = new Markov.Services.Models.LiveSession
-                {
-                    Id = sessionId,
-                    StrategyId = strategyId,
-                    Symbol = symbol,
-                    TimeFrame = timeFrame,
-                    Status = "Running",
-                    StartTime = DateTime.UtcNow
-                };
-                context.LiveSessions.Add(session);
+                session.Status = "Stopped";
                 context.SaveChanges();
             }
-
-            return sessionId;
-        }
-        
-        public void RestartSession(Guid sessionId, Guid strategyId, string symbol, string timeFrame)
-        {
-            var strategy = _strategyService.GetStrategy(strategyId);
-            var symbols = new List<string> { symbol };
-            var tf = Enum.Parse<TimeFrame>(timeFrame, true);
-
-            var engine = new TradingEngine(_exchange, strategy, symbols, tf);
-            _runningEngines[sessionId] = engine;
-            engine.StartAsync();
-        }
-
-        public void StopSession(Guid sessionId)
-        {
-            if (_runningEngines.TryRemove(sessionId, out var engine))
+            else
             {
-                engine.StopAsync();
-            }
-
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
-                var session = context.LiveSessions.Find(sessionId);
-                if (session != null)
-                {
-                    session.Status = "Stopped";
-                    context.SaveChanges();
-                }
+                throw new KeyNotFoundException("Live session not found in database.");
             }
         }
+    }
 
-        public LiveSessionDto GetSession(Guid sessionId)
+    public LiveSessionDto GetSession(Guid sessionId)
+    {
+        using (var scope = _scopeFactory.CreateScope())
         {
-            using (var scope = _serviceProvider.CreateScope())
+            var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
+            var session = context.LiveSessions.Find(sessionId);
+
+            if (session == null)
             {
-                var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
-                var session = context.LiveSessions.Find(sessionId);
+                throw new KeyNotFoundException("Live session not found.");
+            }
 
-                if (session == null)
-                {
-                    throw new KeyNotFoundException("Live session not found.");
-                }
+            var strategy = _strategyService.GetStrategy(session.StrategyId);
+            return new LiveSessionDto
+            {
+                SessionId = session.Id,
+                StrategyId = session.StrategyId,
+                Symbol = session.Symbol,
+                Status = session.Status,
+                StartTime = session.StartTime,
+                StrategyName = strategy.Name
+            };
+        }
+    }
 
+    public IEnumerable<LiveSessionDto> GetAllSessions()
+    {
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
+            var sessions = context.LiveSessions.ToList();
+            return sessions.Select(session =>
+            {
+                var strategy = _strategyService.GetStrategy(session.StrategyId);
                 return new LiveSessionDto
                 {
                     SessionId = session.Id,
@@ -97,27 +124,19 @@ namespace Markov.API.Services
                     Symbol = session.Symbol,
                     Status = session.Status,
                     StartTime = session.StartTime,
-                    StrategyName = _strategyService.GetStrategy(session.StrategyId).Name
+                    StrategyName = strategy.Name
                 };
-            }
+            });
         }
+    }
+    public void RestartSession(Guid sessionId, Guid strategyId, string symbol, string timeFrame)
+    {
+        var strategy = _strategyService.GetStrategy(strategyId);
+        var symbols = new List<string> { symbol };
+        var tf = Enum.Parse<TimeFrame>(timeFrame, true);
 
-        public IEnumerable<LiveSessionDto> GetAllSessions()
-        {
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                var context = scope.ServiceProvider.GetRequiredService<MarkovDbContext>();
-                var sessions = context.LiveSessions.ToList();
-                return sessions.Select(session => new LiveSessionDto
-                {
-                    SessionId = session.Id,
-                    StrategyId = session.StrategyId,
-                    Symbol = session.Symbol,
-                    Status = session.Status,
-                    StartTime = session.StartTime,
-                    StrategyName = _strategyService.GetStrategy(session.StrategyId).Name
-                });
-            }
-        }
+        var engine = new TradingEngine(_exchange, strategy, symbols, tf, _timerService);
+        _runningEngines[sessionId] = engine;
+        engine.StartAsync();
     }
 }

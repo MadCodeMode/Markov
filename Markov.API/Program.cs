@@ -1,6 +1,7 @@
 using HealthChecks.UI.Client;
 using Markov.API.Services;
 using Markov.Services;
+using Markov.Services.Time;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,6 +13,7 @@ builder.Logging.AddConsole();
 builder.Services.AddTradingServices();
 builder.Services.AddScoped<IStrategyService, StrategyService>();
 builder.Services.AddSingleton<ILiveTradingService, LiveTradingService>();
+builder.Services.AddSingleton<ITimerService, TimerService>();
 builder.Services.AddHostedService<LiveSessionManager>();
 // ------------------------------------
 
