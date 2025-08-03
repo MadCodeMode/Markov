@@ -7,6 +7,7 @@ using Markov.Services.Strategies;
 using Markov.Trading.Engine.Filters;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text.Json;
 
@@ -47,12 +48,15 @@ namespace Markov.API.Services
             var strategy = CreateStrategyInstance(strategyConfig.StrategyName);
             var filterDtos = JsonSerializer.Deserialize<List<FilterDto>>(strategyConfig.FiltersJson);
 
-            foreach (var filterDto in filterDtos)
+            if (filterDtos != null)
             {
-                var filter = CreateFilterInstance(filterDto);
-                if (filter != null)
+                foreach (var filterDto in filterDtos)
                 {
-                    strategy.AddFilter(filter);
+                    var filter = CreateFilterInstance(filterDto);
+                    if (filter != null)
+                    {
+                        strategy.AddFilter(filter);
+                    }
                 }
             }
 
@@ -89,6 +93,7 @@ namespace Markov.API.Services
             };
         }
 
+        #pragma warning disable CS8603 // Possible null reference return.
         private ISignalFilter CreateFilterInstance(FilterDto filterDto)
         {
             return filterDto.Name switch
@@ -102,6 +107,7 @@ namespace Markov.API.Services
                 _ => null
             };
         }
+#pragma warning restore CS8603 // Possible null reference return.
 
         private T GetParameter<T>(Dictionary<string, object> parameters, string key)
         {
@@ -109,11 +115,28 @@ namespace Markov.API.Services
             {
                 if (value is JsonElement element)
                 {
-                    return JsonSerializer.Deserialize<T>(element.GetRawText());
+                    // This handles cases where the value from JSON is a JsonElement
+                    if (typeof(T) == typeof(decimal))
+                    {
+                        return (T)(object)element.GetDecimal();
+                    }
+                    if (typeof(T) == typeof(int))
+                    {
+                        return (T)(object)element.GetInt32();
+                    }
+                    if (typeof(T) == typeof(bool))
+                    {
+                        return (T)(object)element.GetBoolean();
+                    }
+                    var deserializedValue = JsonSerializer.Deserialize<T>(element.GetRawText());
+                    if (deserializedValue == null)
+                        throw new InvalidOperationException($"Parameter '{key}' was found but deserialized to null.");
+                    return deserializedValue!;
                 }
+                // This handles cases where the dictionary has been populated from other sources
                 return (T)Convert.ChangeType(value, typeof(T));
             }
-            return default;
+            throw new KeyNotFoundException($"Required parameter '{key}' not found.");
         }
     }
 }

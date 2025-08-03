@@ -17,7 +17,7 @@ namespace Markov.Tests.Filters
             var signals = new List<Signal> { new Signal { Type = SignalType.Buy, Price = 100 } };
             var filter = new TakeProfitStopLossFilter(0.10m, 0.05m);
 
-            var result = filter.Apply(signals, null).First();
+            var result = filter.Apply(signals, new Dictionary<string, IEnumerable<Candle>>()).First();
 
             result.TakeProfit.Should().Be(110);
             result.StopLoss.Should().Be(95);
@@ -30,7 +30,7 @@ namespace Markov.Tests.Filters
             var signals = new List<Signal> { new Signal { Type = SignalType.Sell, Price = 100 } };
             var filter = new TakeProfitStopLossFilter(0.10m, 0.05m);
 
-            var result = filter.Apply(signals, null).First();
+            var result = filter.Apply(signals, new Dictionary<string, IEnumerable<Candle>>()).First();
 
             result.TakeProfit.Should().Be(90);
             result.StopLoss.Should().Be(105);
@@ -43,7 +43,7 @@ namespace Markov.Tests.Filters
             var signals = new List<Signal> { new Signal { Type = SignalType.Buy, Price = 100 } };
             var filter = new TakeProfitStopLossFilter(0.10m, 0.05m, useHoldStrategyForLongs: true);
             
-            var result = filter.Apply(signals, null).First();
+            var result = filter.Apply(signals, new Dictionary<string, IEnumerable<Candle>>()).First();
 
             result.TakeProfit.Should().Be(110);
             result.StopLoss.Should().BeNull();
@@ -56,7 +56,7 @@ namespace Markov.Tests.Filters
             var signals = new List<Signal> { new Signal { Type = SignalType.Buy, Price = 100, TakeProfit = 150, StopLoss = 50 } };
             var filter = new TakeProfitStopLossFilter(0.10m, 0.05m);
 
-            var result = filter.Apply(signals, null).First();
+            var result = filter.Apply(signals, new Dictionary<string, IEnumerable<Candle>>()).First();
 
             result.TakeProfit.Should().Be(150);
             result.StopLoss.Should().Be(50);

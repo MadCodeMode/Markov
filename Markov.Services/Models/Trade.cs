@@ -4,11 +4,12 @@ namespace Markov.Services.Models;
 
 public class Trade
 {
-    public string Id { get; set; }
-    public string OrderId { get; set; }
-    public string Symbol { get; set; }
+    public string Id { get; set; } = string.Empty;
+    public string OrderId { get; set; } = string.Empty;
+    public string Symbol { get; set; } = string.Empty;
     public OrderSide Side { get; set; }
     public decimal Quantity { get; set; }
+    public decimal AmountInvested { get; set; }
     public decimal EntryPrice { get; set; }
     public decimal? ExitPrice { get; set; }
     public decimal Pnl { get; set; }

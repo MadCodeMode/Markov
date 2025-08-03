@@ -13,7 +13,7 @@ namespace Markov.Services.Engine
 {
     public class TradingEngine : ITradingEngine
     {
-        public event Action<Order> OnOrderPlaced;
+        public event Action<Order>? OnOrderPlaced;
 
         private readonly IExchange _exchange;
         private readonly IStrategy _strategy;
@@ -23,8 +23,8 @@ namespace Markov.Services.Engine
         private readonly ILogger<TradingEngine> _logger;
         private readonly TimeSpan _tradingLoopInterval;
 
-        private CancellationTokenSource _cancellationTokenSource;
-        private Task _tradingLoopTask;
+        private CancellationTokenSource? _cancellationTokenSource;
+        private Task? _tradingLoopTask;
 
         public TradingEngine(
             IExchange exchange,
@@ -87,13 +87,18 @@ namespace Markov.Services.Engine
                             Symbol = signal.Symbol,
                             Side = signal.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell,
                             Type = OrderType.Market,
-                            Quantity = 1,
+                            Quantity = 1, // Simplified for now
                             Price = signal.Price,
-                            StopLoss = signal.StopLoss,
-                            TakeProfit = signal.TakeProfit,
-                            UseHoldStrategy = signal.UseHoldStrategy,
                             Timestamp = DateTime.UtcNow
                         };
+
+                        // Apply hold strategy: only set SL/TP if UseHoldStrategy is false
+                        if (!signal.UseHoldStrategy)
+                        {
+                            order.StopLoss = signal.StopLoss;
+                            order.TakeProfit = signal.TakeProfit;
+                        }
+                        // For long trades with UseHoldStrategy, SL is intentionally omitted.
 
                         var placedOrder = await _exchange.PlaceOrderAsync(order);
                         OnOrderPlaced?.Invoke(placedOrder);

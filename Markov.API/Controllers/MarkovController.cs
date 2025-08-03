@@ -92,8 +92,11 @@ namespace Markov.API.Controllers
 
                 foreach (var trade in result.Trades.OrderBy(t => t.ExitTimestamp))
                 {
-                    runningCapital += trade.Pnl;
-                    equityCurveData.Add(new ChartDataDto { Timestamp = trade.ExitTimestamp.Value, Value = runningCapital });
+                    if (trade.ExitTimestamp.HasValue)
+                    {
+                        runningCapital += trade.Pnl;
+                        equityCurveData.Add(new ChartDataDto { Timestamp = trade.ExitTimestamp.Value, Value = runningCapital });
+                    }
                 }
 
                 var resultDto = new BacktestResultDto
@@ -139,7 +142,7 @@ namespace Markov.API.Controllers
             {
                 return NotFound(ex.Message);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // In a real application, log this exception
                 return StatusCode(500, "An error occurred during the backtest.");
@@ -150,6 +153,11 @@ namespace Markov.API.Controllers
         [HttpPost("live/start")]
         public IActionResult StartLiveSession([FromBody] StartLiveSessionRequest request)
         {
+            if (request == null || request.StrategyId == Guid.Empty || string.IsNullOrWhiteSpace(request.Symbol) || string.IsNullOrWhiteSpace(request.TimeFrame))
+            {
+                return BadRequest("StrategyId, Symbol, and TimeFrame are required.");
+            }
+
             try
             {
                 var sessionId = _liveTradingService.StartSession(request.StrategyId, request.Symbol, request.TimeFrame);

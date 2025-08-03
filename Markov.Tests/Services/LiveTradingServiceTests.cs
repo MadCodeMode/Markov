@@ -97,7 +97,7 @@ public class LiveTradingServiceTests
     public void StopSession_WithNonExistentSession_ShouldThrowKeyNotFoundException()
     {
         var nonExistentId = Guid.NewGuid();
-        _mockSessionSet.Setup(m => m.Find(nonExistentId)).Returns((LiveSession)null);
+        _mockSessionSet.Setup(m => m.Find(nonExistentId)).Returns((LiveSession?)null);
 
         Action act = () => _liveTradingService.StopSession(nonExistentId);
 

@@ -76,7 +76,7 @@ namespace Markov.Tests.Engine
             // Arrange
             var signal = new Signal { Symbol = "BTCUSDT", Type = SignalType.Buy, Price = 50000 };
             var placedOrder = new Order { Id = "123", Symbol = "BTCUSDT" };
-            Order receivedOrder = null;
+            Order? receivedOrder = null;
 
             _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>()))
                          .Returns(new List<Signal> { signal });
@@ -92,7 +92,7 @@ namespace Markov.Tests.Engine
             // Assert
             _mockExchange.Verify(e => e.PlaceOrderAsync(It.Is<Order>(o => o.Symbol == signal.Symbol)), Times.AtLeastOnce());
             receivedOrder.Should().NotBeNull();
-            receivedOrder.Id.Should().Be(placedOrder.Id);
+            receivedOrder!.Id.Should().Be(placedOrder.Id);
         }
 
         [Fact]
@@ -128,13 +128,41 @@ namespace Markov.Tests.Engine
         }
 
         [Fact]
+        public async Task WhenSignalHasHoldStrategy_ShouldPlaceOrderWithoutStopLoss()
+        {
+            // Arrange
+            var signal = new Signal 
+            { 
+                Symbol = "BTCUSDT", 
+                Type = SignalType.Buy, 
+                Price = 50000, 
+                StopLoss = 45000, // A stop loss is provided
+                UseHoldStrategy = true // But the hold strategy is active
+            };
+            _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>()))
+                         .Returns(new List<Signal> { signal });
+            _mockExchange.Setup(e => e.PlaceOrderAsync(It.IsAny<Order>()))
+                         .ReturnsAsync(new Order());
+
+            // Act
+            await _tradingEngine.StartAsync();
+            await Task.Delay(100);
+            await _tradingEngine.StopAsync();
+
+            // Assert
+            // Verify that the placed order has a null StopLoss because the hold strategy was on.
+            _mockExchange.Verify(e => e.PlaceOrderAsync(It.Is<Order>(o => 
+                o.Symbol == signal.Symbol && 
+                o.StopLoss == null)), 
+                Times.AtLeastOnce());
+        }
+
+        [Fact]
         public async Task WhenExchangeThrowsException_ShouldLogAndContinue()
         {
             // Arrange
             var exception = new InvalidOperationException("Exchange is down");
-            var callCount = 0;
             _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
-                .Callback(() => callCount++)
                 .ThrowsAsync(exception);
 
             // Act
@@ -147,9 +175,9 @@ namespace Markov.Tests.Engine
                 x => x.Log(
                     LogLevel.Error,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("An unexpected error occurred")),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("An unexpected error occurred")),
                     exception,
-                    It.IsAny<Func<It.IsAnyType, Exception, string>>()),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.Once);
         }
     }

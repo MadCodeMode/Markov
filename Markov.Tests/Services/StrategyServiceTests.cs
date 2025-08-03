@@ -94,7 +94,7 @@ namespace Markov.Tests.Services
         public void GetStrategy_WithNonExistingId_ShouldThrowKeyNotFoundException()
         {
             var nonExistentId = Guid.NewGuid();
-            _mockSet.Setup(m => m.Find(nonExistentId)).Returns((StrategyConfiguration)null);
+            _mockSet.Setup(m => m.Find(nonExistentId)).Returns((StrategyConfiguration?)null);
 
             Action act = () => _strategyService.GetStrategy(nonExistentId);
 

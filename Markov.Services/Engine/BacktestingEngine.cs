@@ -44,9 +44,10 @@ namespace Markov.Services.Engine
                         }
                     }
 
-                    if (tradingCapital > 0 && !openPositions.Any(p=> p.Symbol == signalForThisCandle.Symbol))
+                    if (tradingCapital > 10) // Ensure there's enough capital to trade
                     {
-                        var tradeSize = tradingCapital;
+                        // Use 10% of current capital for this trade
+                        var tradeSize = tradingCapital * 0.1m; 
                         var quantity = tradeSize / signalForThisCandle.Price;
 
                         if (signalForThisCandle.UseHoldStrategy && signalForThisCandle.Type == SignalType.Buy)
@@ -55,8 +56,10 @@ namespace Markov.Services.Engine
                             {
                                 heldAssets[signalForThisCandle.Symbol] = 0;
                             }
+                            // Hold the quantity of the asset for this trade
                             heldAssets[signalForThisCandle.Symbol] += quantity;
-                            tradingCapital = 0;
+                            // Reduce trading capital by the amount used for the held asset
+                            tradingCapital -= tradeSize; 
                             result.HoldCount++;
                         }
                         else
@@ -69,9 +72,11 @@ namespace Markov.Services.Engine
                                EntryPrice = signalForThisCandle.Price,
                                EntryTimestamp = signalForThisCandle.Timestamp,
                                TakeProfit = signalForThisCandle.TakeProfit,
-                               StopLoss = signalForThisCandle.StopLoss
+                               StopLoss = signalForThisCandle.StopLoss,
+                               AmountInvested = tradeSize // Track the capital invested in this specific trade
                            });
-                           tradingCapital = 0;
+                           // Reduce trading capital by the amount invested
+                           tradingCapital -= tradeSize;
                         }
                     }
                 }
@@ -95,7 +100,7 @@ namespace Markov.Services.Engine
                             positionClosed = true;
                         }
                     }
-                    else
+                    else // Sell side
                     {
                         if (position.TakeProfit.HasValue && candle.Low <= position.TakeProfit.Value)
                         {
@@ -116,10 +121,15 @@ namespace Markov.Services.Engine
                 }
             }
 
+            // Liquidate any remaining open positions at the last candle's price
             if (openPositions.Any() && candles.Any())
             {
                 var lastPrice = candles.Last().Close;
-                tradingCapital += openPositions.Sum(p => p.Quantity * lastPrice);
+                foreach (var position in openPositions)
+                {
+                    decimal finalValue = position.Quantity * lastPrice;
+                    tradingCapital += finalValue; // Add the liquidated value back to capital
+                }
             }
             result.FinalCapital = tradingCapital;
 
@@ -139,14 +149,14 @@ namespace Markov.Services.Engine
             position.ExitTimestamp = exitTimestamp;
             position.Outcome = outcome;
 
-            decimal initialValue = position.EntryPrice * position.Quantity;
+            decimal initialValue = position.AmountInvested;
             decimal finalValue = exitPrice * position.Quantity;
             decimal pnl = (position.Side == OrderSide.Buy) ? finalValue - initialValue : initialValue - finalValue;
 
             position.Pnl = pnl;
             
-            // The free 'capital' is now the total value returned from the closed trade.
-            capital = finalValue;
+            // Add the proceeds of the trade back to the main capital pool
+            capital += finalValue;
 
             if (pnl > 0) result.WinCount++;
             else result.LossCount++;

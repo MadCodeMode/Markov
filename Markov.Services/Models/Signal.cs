@@ -4,7 +4,7 @@ namespace Markov.Services.Models;
 
 public class Signal
 {
-    public string Symbol { get; set; }
+    public string Symbol { get; set; } = string.Empty;
     public SignalType Type { get; set; }
     public decimal Price { get; set; }
     public DateTime Timestamp { get; set; }

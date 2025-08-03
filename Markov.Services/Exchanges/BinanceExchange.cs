@@ -36,7 +36,7 @@ namespace Markov.Services.Exchanges
 
             if (!result.Success)
             {
-                throw new InvalidOperationException($"Failed to fetch data from Binance: {result.Error.Message}");
+                throw new InvalidOperationException($"Failed to fetch data from Binance: {result.Error?.Message ?? "Unknown error"}");
             }
 
             return result.Data.Select(k => new Candle

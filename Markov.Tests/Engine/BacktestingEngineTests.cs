@@ -60,9 +60,11 @@ namespace Markov.Tests.Engine
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
 
-            result.FinalCapital.Should().Be(11000);
+            // Initial: 10000. Trade size: 1000. PNL: +100. Capital returned: 1100.
+            // Final capital: 9000 (remaining) + 1100 = 10100
+            result.FinalCapital.Should().Be(10100);
             result.Trades.Should().HaveCount(1);
-            result.Trades.First().Pnl.Should().Be(1000);
+            result.Trades.First().Pnl.Should().Be(100);
             result.WinCount.Should().Be(1);
         }
 
@@ -87,9 +89,11 @@ namespace Markov.Tests.Engine
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
 
-            result.FinalCapital.Should().Be(9000);
+            // Initial: 10000. Trade size: 1000. PNL: -100. Capital returned: 900.
+            // Final capital: 9000 (remaining) + 900 = 9900
+            result.FinalCapital.Should().Be(9900);
             result.Trades.Should().HaveCount(1);
-            result.Trades.First().Pnl.Should().Be(-1000);
+            result.Trades.First().Pnl.Should().Be(-100);
             result.LossCount.Should().Be(1);
         }
 
@@ -111,7 +115,8 @@ namespace Markov.Tests.Engine
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
 
-            result.FinalCapital.Should().Be(11000);
+            // Same as profitable trade: 9000 + 1100 = 10100
+            result.FinalCapital.Should().Be(10100);
             result.Trades.First().ExitPrice.Should().Be(110);
             result.Trades.First().Outcome.Should().Be(TradeOutcome.TakeProfit);
         }
@@ -134,7 +139,8 @@ namespace Markov.Tests.Engine
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
 
-            result.FinalCapital.Should().Be(9000);
+            // Same as losing trade: 9000 + 900 = 9900
+            result.FinalCapital.Should().Be(9900);
             result.Trades.First().ExitPrice.Should().Be(90);
             result.Trades.First().Outcome.Should().Be(TradeOutcome.StopLoss);
         }
@@ -142,7 +148,7 @@ namespace Markov.Tests.Engine
         [Fact]
         public async Task RunAsync_HoldStrategy_ShouldMoveCapitalToHeldAssets()
         {
-            var parameters = CreateDefaultParameters();
+            var parameters = CreateDefaultParameters(10000);
             var entryTime = parameters.From.AddDays(1);
             var candles = new List<Candle>
             {
@@ -158,9 +164,12 @@ namespace Markov.Tests.Engine
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
 
-            result.FinalCapital.Should().Be(0);
-            result.HeldAssets[_symbol].Should().Be(100);
-            result.FinalHeldAssetsValue.Should().Be(12000);
+            // 10% of 10000 capital = 1000, used to buy asset at price 100, so quantity is 10.
+            // Remaining capital is 9000.
+            result.FinalCapital.Should().Be(9000); 
+            result.HeldAssets[_symbol].Should().BeApproximately(10m, 0.001m);
+            // Value of held assets at the end is 10 * 120 = 1200
+            result.FinalHeldAssetsValue.Should().Be(1200);
             result.HoldCount.Should().Be(1);
         }
 
@@ -183,7 +192,9 @@ namespace Markov.Tests.Engine
 
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
 
-            result.FinalCapital.Should().Be(10500);
+            // Initial: 10000. Trade size: 1000. Position value at end: 1000 * 1.05 = 1050.
+            // Final capital: 9000 (remaining) + 1050 = 10050
+            result.FinalCapital.Should().Be(10050);
             result.Trades.Should().BeEmpty();
         }
     }
