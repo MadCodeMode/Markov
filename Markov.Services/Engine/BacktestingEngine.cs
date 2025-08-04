@@ -49,16 +49,17 @@ namespace Markov.Services.Engine
                     {
                         var entryPrice = nextCandle.Open; // Corrected entry price
 
-                        if (openPositions.Any(p => p.Symbol == signalForThisCandle.Symbol))
+                        var signalSide = signalForThisCandle.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell;
+                        var positionToClose = openPositions
+                            .FirstOrDefault(p => p.Symbol == signalForThisCandle.Symbol && p.Side != signalSide);
+
+                        if (positionToClose != null)
                         {
-                            var positionToClose = openPositions.First(p => p.Symbol == signalForThisCandle.Symbol);
-                            if (positionToClose.Side != (signalForThisCandle.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell))
-                            {
-                                ClosePosition(positionToClose, entryPrice, nextCandle.Timestamp, TradeOutcome.Closed, ref tradingCapital, result, parameters);
-                                openPositions.Remove(positionToClose);
-                            }
+                            ClosePosition(positionToClose, entryPrice, nextCandle.Timestamp, TradeOutcome.Closed, ref tradingCapital, result, parameters);
+                            openPositions.Remove(positionToClose);
                         }
-                        else if (tradingCapital > MinimumCapitalToOpenPosition)
+
+                        if (tradingCapital > MinimumCapitalToOpenPosition)
                         {
                             OpenPosition(signalForThisCandle, entryPrice, nextCandle.Timestamp, ref tradingCapital, openPositions, heldAssets, result, parameters);
                         }

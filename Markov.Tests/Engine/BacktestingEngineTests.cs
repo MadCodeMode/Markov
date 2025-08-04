@@ -110,19 +110,26 @@ namespace Markov.Tests.Engine
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
 
             // --- Calculation ---
-            // Initial Capital: 10000
-            // Trade Size: 1000
-            // Entry Price: 102 (Open of next candle)
-            // Exit Price: 112 (Open of candle after sell signal)
-            // Capital after entry: 9000
-            // Quantity: 1000 / 102 = 9.8039215686
-            // Exit Value: 9.8039215686 * 112 = 1098.03921568
-            // PNL: 1098.03921568 - 1000 = 98.03921568
-            // Final Capital: 9000 + 1098.03921568 = 10098.03921568
-            result.FinalCapital.Should().BeApproximately(10098.04m, 2);
-            result.Trades.Should().HaveCount(1);
-            result.Trades.First().Pnl.Should().BeApproximately(98.04m, 2);
+            // With the new logic, the first BUY signal opens a long position.
+            // The second SELL signal closes the long position AND opens a new short position.
+            // This short position is then liquidated at the end.
+            // --- Trade 1 (Long) ---
+            // Initial Capital: 10000, Trade Size: 1000
+            // Entry: 102, Exit: 112
+            // PNL: (112 - 102) * (1000 / 102) = 98.04
+            // Capital after trade 1: 10000 + 98.04 = 10098.04
+            // --- Trade 2 (Short) ---
+            // Capital: 10098.04, Trade Size: 1009.80
+            // Entry: 112
+            // Liquidation Price: 120 (last candle close)
+            // PNL: (112 - 120) * (1009.80 / 112) = -72.13
+            // Final Capital: 10098.04 - 72.13 = 10025.91
+            result.FinalCapital.Should().BeApproximately(10025.91m, 2);
+            result.Trades.Should().HaveCount(2);
+            result.Trades[0].Pnl.Should().BeApproximately(98.04m, 2);
+            result.Trades[1].Pnl.Should().BeApproximately(-72.13m, 2);
             result.WinCount.Should().Be(1);
+            result.LossCount.Should().Be(1);
         }
 
         [Fact]
@@ -151,19 +158,23 @@ namespace Markov.Tests.Engine
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
 
             // --- Calculation ---
-            // Initial Capital: 10000
-            // Trade Size: 1000
-            // Entry Price: 102
-            // Exit Price: 94
-            // Capital after entry: 9000
-            // Quantity: 1000 / 102 = 9.8039215686
-            // Exit Value: 9.8039215686 * 94 = 921.56862745
-            // PNL: 921.56862745 - 1000 = -78.43137255
-            // Final Capital: 9000 + 921.56862745 = 9921.56862745
-            result.FinalCapital.Should().BeApproximately(9921.57m, 2);
-            result.Trades.Should().HaveCount(1);
-            result.Trades.First().Pnl.Should().BeApproximately(-78.43m, 2);
+            // --- Trade 1 (Long) ---
+            // Initial Capital: 10000, Trade Size: 1000
+            // Entry: 102, Exit: 94
+            // PNL: (94 - 102) * (1000 / 102) = -78.43
+            // Capital after trade 1: 10000 - 78.43 = 9921.57
+            // --- Trade 2 (Short) ---
+            // Capital: 9921.57, Trade Size: 992.16
+            // Entry: 94
+            // Liquidation Price: 90 (last candle close)
+            // PNL: (94 - 90) * (992.16 / 94) = 42.22
+            // Final Capital: 9921.57 + 42.22 = 9963.79
+            result.FinalCapital.Should().BeApproximately(9963.79m, 2);
+            result.Trades.Should().HaveCount(2);
+            result.Trades[0].Pnl.Should().BeApproximately(-78.43m, 2);
+            result.Trades[1].Pnl.Should().BeApproximately(42.22m, 2);
             result.LossCount.Should().Be(1);
+            result.WinCount.Should().Be(1);
         }
 
 
@@ -302,16 +313,23 @@ namespace Markov.Tests.Engine
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
 
             // --- Calculation ---
-            // Initial Capital: 10000
-            // Trade Size: 1000
-            // Entry Price: 98 (Open of next candle)
-            // Exit Price: 94 (Open of candle after buy signal)
-            // PNL = AmountInvested - ValueOnExit = 1000 - (1000/98 * 94) = 1000 - 959.18 = 40.82
-            // Final Capital = 10000 + 40.82 = 10040.82
-            result.FinalCapital.Should().BeApproximately(10040.82m, 2);
-            result.Trades.Should().HaveCount(1);
-            result.Trades.First().Pnl.Should().BeApproximately(40.82m, 2);
+            // --- Trade 1 (Short) ---
+            // Initial Capital: 10000, Trade Size: 1000
+            // Entry: 98, Exit: 94
+            // PNL: (98 - 94) * (1000 / 98) = 40.82
+            // Capital after trade 1: 10000 + 40.82 = 10040.82
+            // --- Trade 2 (Long) ---
+            // Capital: 10040.82, Trade Size: 1004.08
+            // Entry: 94
+            // Liquidation Price: 90 (last candle close)
+            // PNL: (90 - 94) * (1004.08 / 94) = -42.73
+            // Final Capital: 10040.82 - 42.73 = 9998.09
+            result.FinalCapital.Should().BeApproximately(9998.09m, 2);
+            result.Trades.Should().HaveCount(2);
+            result.Trades[0].Pnl.Should().BeApproximately(40.82m, 2);
+            result.Trades[1].Pnl.Should().BeApproximately(-42.73m, 2);
             result.WinCount.Should().Be(1);
+            result.LossCount.Should().Be(1);
         }
 
         [Fact]
@@ -340,16 +358,23 @@ namespace Markov.Tests.Engine
             var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
 
             // --- Calculation ---
-            // Initial Capital: 10000
-            // Trade Size: 1000
-            // Entry Price: 102
-            // Exit Price: 106
-            // PNL = AmountInvested - ValueOnExit = 1000 - (1000/102 * 106) = 1000 - 1039.22 = -39.22
-            // Final Capital = 10000 - 39.22 = 9960.78
-            result.FinalCapital.Should().BeApproximately(9960.78m, 2);
-            result.Trades.Should().HaveCount(1);
-            result.Trades.First().Pnl.Should().BeApproximately(-39.22m, 2);
+            // --- Trade 1 (Short) ---
+            // Initial Capital: 10000, Trade Size: 1000
+            // Entry: 102, Exit: 106
+            // PNL: (102 - 106) * (1000 / 102) = -39.22
+            // Capital after trade 1: 10000 - 39.22 = 9960.78
+            // --- Trade 2 (Long) ---
+            // Capital: 9960.78, Trade Size: 996.08
+            // Entry: 106
+            // Liquidation Price: 110 (last candle close)
+            // PNL: (110 - 106) * (996.08 / 106) = 37.59
+            // Final Capital: 9960.78 + 37.59 = 9998.37
+            result.FinalCapital.Should().BeApproximately(9998.37m, 2);
+            result.Trades.Should().HaveCount(2);
+            result.Trades[0].Pnl.Should().BeApproximately(-39.22m, 2);
+            result.Trades[1].Pnl.Should().BeApproximately(37.59m, 2);
             result.LossCount.Should().Be(1);
+            result.WinCount.Should().Be(1);
         }
 
         [Fact]
