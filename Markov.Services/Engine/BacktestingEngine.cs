@@ -186,15 +186,23 @@ namespace Markov.Services.Engine
             position.ExitTimestamp = exitTimestamp;
             position.Outcome = outcome;
 
-            decimal initialValue = position.AmountInvested;
-            decimal finalValue = actualExitPrice * position.Quantity;
-            decimal entryCommission = initialValue * parameters.CommissionPercentage;
-            decimal exitCommission = finalValue * parameters.CommissionPercentage;
-            decimal pnl = (position.Side == OrderSide.Buy) ? finalValue - initialValue : initialValue - finalValue;
+            decimal amountInvested = position.AmountInvested;
+            decimal valueOnExit = actualExitPrice * position.Quantity;
 
-            position.Pnl = pnl - entryCommission - exitCommission; // Net PNL
+            // Calculate commissions for PNL reporting
+            decimal entryCommission = amountInvested * parameters.CommissionPercentage;
+            decimal exitCommission = valueOnExit * parameters.CommissionPercentage;
 
-            capital += finalValue - exitCommission;
+            // Calculate the net PNL for this trade and store it
+            decimal grossPnl = (position.Side == OrderSide.Buy) ? valueOnExit - amountInvested : amountInvested - valueOnExit;
+            position.Pnl = grossPnl - entryCommission - exitCommission;
+
+            // Update capital. 
+            // In OpenPosition, capital was reduced by (amountInvested + entryCommission).
+            // Here, we add back the proceeds of the sale, which is the exit value minus the exit commission.
+            // The net effect on capital is precisely the PNL of the trade.
+            decimal proceeds = valueOnExit - exitCommission;
+            capital += proceeds;
 
             if (position.Pnl > 0) result.WinCount++;
             else result.LossCount++;
