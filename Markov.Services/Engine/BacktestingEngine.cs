@@ -51,7 +51,9 @@ namespace Markov.Services.Engine
 
                         var signalSide = signalForThisCandle.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell;
                         var positionToClose = openPositions
-                            .FirstOrDefault(p => p.Symbol == signalForThisCandle.Symbol && p.Side != signalSide);
+                            .Where(p => p.Symbol == signalForThisCandle.Symbol && p.Side != signalSide)
+                            .OrderBy(p => p.EntryTimestamp)
+                            .FirstOrDefault();
 
                         if (positionToClose != null)
                         {

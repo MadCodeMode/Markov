@@ -442,5 +442,61 @@ namespace Markov.Tests.Engine
             result.Trades.First().ExitPrice.Should().Be(110);
             result.Trades.First().Outcome.Should().Be(TradeOutcome.StopLoss);
         }
+
+        [Fact]
+        public async Task RunAsync_MultipleOpenPositions_ShouldCloseOldestFirst_FIFO()
+        {
+            // Arrange
+            var parameters = CreateDefaultParameters();
+            var signalTime1 = parameters.From.AddDays(1);
+            var entryTime1 = parameters.From.AddDays(2);
+            var signalTime2 = parameters.From.AddDays(2);
+            var entryTime2 = parameters.From.AddDays(3);
+            var closeSignalTime = parameters.From.AddDays(3);
+            var exitTime = parameters.From.AddDays(4);
+            var endTime = parameters.From.AddDays(5);
+
+            var candles = new List<Candle>
+            {
+                new Candle { Timestamp = signalTime1, Close = 100 },      // Signal 1 (Buy)
+                new Candle { Timestamp = entryTime1, Open = 102 },        // Entry 1
+                new Candle { Timestamp = entryTime2, Open = 104 },        // Entry 2
+                new Candle { Timestamp = exitTime, Open = 108 },          // Exit 1, Entry 3 (Short)
+                new Candle { Timestamp = endTime, Close = 110 }           // Liquidation of 2nd and 3rd positions
+            };
+
+            var signals = new List<Signal>
+            {
+                new Signal { Type = SignalType.Buy, Timestamp = signalTime1, Symbol = _symbol },
+                new Signal { Type = SignalType.Buy, Timestamp = signalTime2, Symbol = _symbol },
+                new Signal { Type = SignalType.Sell, Timestamp = closeSignalTime, Symbol = _symbol }
+            };
+
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(candles);
+            _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>())).Returns(signals);
+
+            // Act
+            var result = await _backtestingEngine.RunAsync(_mockStrategy.Object, parameters);
+
+            // Assert
+            result.Trades.Should().HaveCount(3);
+
+            var firstTrade = result.Trades.FirstOrDefault(t => t.EntryPrice == 102);
+            var secondTrade = result.Trades.FirstOrDefault(t => t.EntryPrice == 104);
+            var thirdTrade = result.Trades.FirstOrDefault(t => t.EntryPrice == 108); // This is the reversal trade
+
+            firstTrade.Should().NotBeNull();
+            firstTrade.ExitPrice.Should().Be(108); // Closed by the Sell signal
+            firstTrade.Outcome.Should().Be(TradeOutcome.Closed);
+
+            secondTrade.Should().NotBeNull();
+            secondTrade.ExitPrice.Should().Be(110); // Liquidated at the end
+            secondTrade.Outcome.Should().Be(TradeOutcome.Closed);
+
+            thirdTrade.Should().NotBeNull();
+            thirdTrade.Side.Should().Be(OrderSide.Sell);
+            thirdTrade.ExitPrice.Should().Be(110); // Liquidated at the end
+            thirdTrade.Outcome.Should().Be(TradeOutcome.Closed);
+        }
     }
 }
