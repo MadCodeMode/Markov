@@ -132,27 +132,38 @@ namespace Markov.Services.Engine
 
         private void OpenPosition(Signal signal, decimal entryPrice, DateTime entryTimestamp, ref decimal capital, List<Trade> openPositions, Dictionary<string, decimal> heldAssets, BacktestResult result, BacktestParameters parameters)
         {
-            decimal tradeSize;
+            // 1. Determine the principal amount to invest
+            decimal principalAmount;
             if (parameters.TradeSizeMode == TradeSizeMode.PercentageOfCapital)
             {
-                tradeSize = capital * parameters.TradeSizeValue;
+                principalAmount = capital * parameters.TradeSizeValue;
             }
             else
             {
-                tradeSize = parameters.TradeSizeValue;
+                principalAmount = parameters.TradeSizeValue;
             }
 
-            if (tradeSize > capital)
+            // 2. Calculate the total cost including commission
+            decimal entryCommission = principalAmount * parameters.CommissionPercentage;
+            decimal totalCost = principalAmount + entryCommission;
+
+            // 3. Check for sufficient capital and scale down if necessary
+            if (totalCost > capital)
             {
-                tradeSize = capital;
+                // Not enough capital for the desired trade size.
+                // Scale down to use all available capital for the total cost.
+                principalAmount = capital / (1 + parameters.CommissionPercentage);
+                totalCost = capital;
             }
 
+            // 4. Calculate trade details
             var actualEntryPrice = ApplySlippage(entryPrice, signal.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell, parameters.SlippagePercentage);
-            var commission = tradeSize * parameters.CommissionPercentage;
-            var quantity = tradeSize / actualEntryPrice;
+            var quantity = principalAmount / actualEntryPrice;
 
-            capital -= (tradeSize + commission);
+            // 5. Update capital by deducting the total cost
+            capital -= totalCost;
 
+            // 6. Record the new position
             if (signal.UseHoldStrategy && signal.Type == SignalType.Buy)
             {
                 if (!heldAssets.ContainsKey(signal.Symbol))
@@ -173,7 +184,7 @@ namespace Markov.Services.Engine
                     EntryTimestamp = entryTimestamp,
                     TakeProfit = signal.TakeProfit,
                     StopLoss = signal.StopLoss,
-                    AmountInvested = tradeSize
+                    AmountInvested = principalAmount // Store the principal for PnL calculations
                 });
             }
         }
