@@ -10,6 +10,8 @@ namespace Markov.Services.Engine
 {
     public class BacktestingEngine : IBacktestingEngine
     {
+        private const decimal MinimumCapitalToOpenPosition = 10m;
+
         public async Task<BacktestResult> RunAsync(IStrategy strategy, BacktestParameters parameters)
         {
             var data = await parameters.Exchange.GetHistoricalDataAsync(parameters.Symbol, parameters.TimeFrame, parameters.From, parameters.To, CancellationToken.None);
@@ -56,7 +58,7 @@ namespace Markov.Services.Engine
                                 openPositions.Remove(positionToClose);
                             }
                         }
-                        else if (tradingCapital > 10)
+                        else if (tradingCapital > MinimumCapitalToOpenPosition)
                         {
                             OpenPosition(signalForThisCandle, entryPrice, nextCandle.Timestamp, ref tradingCapital, openPositions, heldAssets, result, parameters);
                         }
@@ -65,16 +67,12 @@ namespace Markov.Services.Engine
             }
 
             // Liquidate any remaining open positions at the close of the last candle
-            if (openPositions.Any())
+            for (int j = openPositions.Count - 1; j >= 0; j--)
             {
-                var lastPrice = candles.Last().Close;
-                foreach (var position in openPositions)
-                {
-                    decimal finalValue = position.Quantity * lastPrice;
-                    tradingCapital += finalValue;
-                    tradingCapital -= finalValue * parameters.CommissionPercentage; // Commission on liquidation
-                }
-                openPositions.Clear(); // All positions are liquidated
+                var position = openPositions[j];
+                var lastCandle = candles.Last();
+                ClosePosition(position, lastCandle.Close, lastCandle.Timestamp, TradeOutcome.Closed, ref tradingCapital, result, parameters);
+                openPositions.RemoveAt(j);
             }
             result.FinalCapital = tradingCapital;
 
@@ -143,28 +141,45 @@ namespace Markov.Services.Engine
                 principalAmount = parameters.TradeSizeValue;
             }
 
-            // 2. Calculate the total cost including commission
-            decimal entryCommission = principalAmount * parameters.CommissionPercentage;
-            decimal totalCost = principalAmount + entryCommission;
+            var side = signal.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell;
 
-            // 3. Check for sufficient capital and scale down if necessary
-            if (totalCost > capital)
+            // 2. Check for sufficient capital and scale down if necessary
+            if (side == OrderSide.Buy)
             {
-                // Not enough capital for the desired trade size.
-                // Scale down to use all available capital for the total cost.
-                principalAmount = capital / (1 + parameters.CommissionPercentage);
-                totalCost = capital;
+                decimal requiredCapital = principalAmount * (1 + parameters.CommissionPercentage);
+                if (requiredCapital > capital)
+                {
+                    // Not enough capital, scale down to use all available capital.
+                    principalAmount = capital / (1 + parameters.CommissionPercentage);
+                }
+            }
+            else // OrderSide.Sell
+            {
+                // For short selling, margin is required. We'll use a simplified model
+                // where the margin required is the principal amount of the trade.
+                if (principalAmount > capital)
+                {
+                    principalAmount = capital; // Scale down to available capital (margin)
+                }
             }
 
-            // 4. Calculate trade details
-            var actualEntryPrice = ApplySlippage(entryPrice, signal.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell, parameters.SlippagePercentage);
+            // 3. Calculate trade details
+            var actualEntryPrice = ApplySlippage(entryPrice, side, parameters.SlippagePercentage);
             var quantity = principalAmount / actualEntryPrice;
+            decimal entryCommission = principalAmount * parameters.CommissionPercentage;
 
-            // 5. Update capital by deducting the total cost
-            capital -= totalCost;
+            // 4. Update capital
+            if (side == OrderSide.Buy)
+            {
+                capital -= (principalAmount + entryCommission);
+            }
+            else // OrderSide.Sell
+            {
+                capital += principalAmount - entryCommission;
+            }
 
-            // 6. Record the new position
-            if (signal.UseHoldStrategy && signal.Type == SignalType.Buy)
+            // 5. Record the new position
+            if (signal.UseHoldStrategy && side == OrderSide.Buy)
             {
                 if (!heldAssets.ContainsKey(signal.Symbol))
                 {
@@ -177,14 +192,14 @@ namespace Markov.Services.Engine
             {
                 openPositions.Add(new Trade
                 {
-                    Side = signal.Type == SignalType.Buy ? OrderSide.Buy : OrderSide.Sell,
+                    Side = side,
                     Symbol = signal.Symbol,
                     Quantity = quantity,
                     EntryPrice = actualEntryPrice,
                     EntryTimestamp = entryTimestamp,
                     TakeProfit = signal.TakeProfit,
                     StopLoss = signal.StopLoss,
-                    AmountInvested = principalAmount // Store the principal for PnL calculations
+                    AmountInvested = principalAmount
                 });
             }
         }
@@ -208,12 +223,17 @@ namespace Markov.Services.Engine
             decimal grossPnl = (position.Side == OrderSide.Buy) ? valueOnExit - amountInvested : amountInvested - valueOnExit;
             position.Pnl = grossPnl - entryCommission - exitCommission;
 
-            // Update capital. 
-            // In OpenPosition, capital was reduced by (amountInvested + entryCommission).
-            // Here, we add back the proceeds of the sale, which is the exit value minus the exit commission.
-            // The net effect on capital is precisely the PNL of the trade.
-            decimal proceeds = valueOnExit - exitCommission;
-            capital += proceeds;
+            // Update capital based on the position side
+            if (position.Side == OrderSide.Buy)
+            {
+                // We sold our long position, so we receive the proceeds.
+                capital += valueOnExit - exitCommission;
+            }
+            else // OrderSide.Sell
+            {
+                // We bought to cover our short position, so we pay the cost.
+                capital -= (valueOnExit + exitCommission);
+            }
 
             if (position.Pnl > 0) result.WinCount++;
             else result.LossCount++;
