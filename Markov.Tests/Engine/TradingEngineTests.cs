@@ -271,5 +271,37 @@ namespace Markov.Tests.Engine
             
             callCount.Should().Be(0);
         }
+    [Fact]
+        public async Task WhenHistoricalDataIsPresent_ShouldOnlyProcessRecentSignals()
+        {
+            // Arrange
+            var now = DateTime.UtcNow;
+            var historicalCandles = new List<Candle>
+            {
+                new Candle { Timestamp = now.AddMinutes(-2), Close = 48000 },
+                new Candle { Timestamp = now.AddMinutes(-1), Close = 49000 },
+            };
+            var recentCandle = new Candle { Timestamp = now, Close = 50000 };
+            var allCandles = new List<Candle>(historicalCandles) { recentCandle };
+
+            var historicalSignal = new Signal { Symbol = "BTCUSDT", Type = SignalType.Buy, Price = 49000, Timestamp = now.AddMinutes(-1) };
+            var recentSignal = new Signal { Symbol = "BTCUSDT", Type = SignalType.Buy, Price = 50000, Timestamp = now };
+
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                         .ReturnsAsync(allCandles);
+            _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>()))
+                         .Returns(new List<Signal> { historicalSignal, recentSignal });
+            _mockExchange.Setup(e => e.PlaceOrderAsync(It.IsAny<Order>()))
+                         .ReturnsAsync(new Order());
+
+            // Act
+            await _tradingEngine.StartAsync();
+            await Task.Delay(100);
+            await _tradingEngine.StopAsync();
+
+            // Assert
+            _mockExchange.Verify(e => e.PlaceOrderAsync(It.Is<Order>(o => o.Price == recentSignal.Price)), Times.Once());
+            _mockExchange.Verify(e => e.PlaceOrderAsync(It.Is<Order>(o => o.Price == historicalSignal.Price)), Times.Never());
+        }
     }
 }

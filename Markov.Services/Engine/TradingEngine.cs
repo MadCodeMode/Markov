@@ -93,7 +93,8 @@ namespace Markov.Services.Engine
                     // Subsequent updates are within the loop's try-catch.
                     await UpdateHistoricalDataAsync(token);
 
-                    var signals = _strategy.GetFilteredSignals(_data.ToDictionary(kvp => kvp.Key, kvp => (IEnumerable<Candle>)kvp.Value));
+                    var signals = _strategy.GetFilteredSignals(_data
+                        .ToDictionary(kvp => kvp.Key, kvp => (IEnumerable<Candle>)kvp.Value));
 
                     var lastCandleTimestamps = _data
                         .Where(kvp => kvp.Value.Any())
@@ -101,7 +102,7 @@ namespace Markov.Services.Engine
 
                     var recentSignals = signals.Where(s => 
                         lastCandleTimestamps.ContainsKey(s.Symbol) && 
-                        s.Timestamp >= lastCandleTimestamps[s.Symbol]);
+                        s.Timestamp == lastCandleTimestamps[s.Symbol]);
 
                     if (recentSignals.Any())
                     {
