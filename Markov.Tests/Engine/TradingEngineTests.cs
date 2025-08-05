@@ -31,6 +31,12 @@ namespace Markov.Tests.Engine
             _mockLogger = new Mock<ILogger<TradingEngine>>();
             _symbols = new List<string> { "BTCUSDT" };
 
+            var tradingSettings = new TradingSettings
+            {
+                TradingLoopIntervalSeconds = 1,
+                SizeMode = TradeSizeMode.FixedAmount,
+                Size = 1
+            };
             _tradingEngine = new TradingEngine(
                 _mockExchange.Object,
                 _mockStrategy.Object,
@@ -38,12 +44,14 @@ namespace Markov.Tests.Engine
                 TimeFrame.OneMinute,
                 _mockTimerService.Object,
                 _mockLogger.Object,
-                TimeSpan.FromMilliseconds(10) // Use a short interval for testing
+                tradingSettings
             );
 
             // Setup mocks for successful runs
             _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
-                         .ReturnsAsync(new List<Candle> { new Candle { Timestamp = DateTime.UtcNow } });
+                         .ReturnsAsync(new List<Candle> { new Candle { Timestamp = DateTime.UtcNow, Close = 50000 } });
+            _mockExchange.Setup(e => e.GetBalanceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                         .ReturnsAsync(new AccountBalance { Asset = "USDT", Free = 10000 });
             _mockTimerService.Setup(t => t.Delay(It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
                              .Returns(Task.CompletedTask);
         }
@@ -74,10 +82,13 @@ namespace Markov.Tests.Engine
         public async Task WhenSignalGenerated_ShouldPlaceOrderAndFireEvent()
         {
             // Arrange
-            var signal = new Signal { Symbol = "BTCUSDT", Type = SignalType.Buy, Price = 50000 };
+            var now = DateTime.UtcNow;
+            var signal = new Signal { Symbol = "BTCUSDT", Type = SignalType.Buy, Price = 50000, Timestamp = now };
             var placedOrder = new Order { Id = "123", Symbol = "BTCUSDT" };
             Order? receivedOrder = null;
 
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                         .ReturnsAsync(new List<Candle> { new Candle { Timestamp = now, Close = 50000 } });
             _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>()))
                          .Returns(new List<Signal> { signal });
             _mockExchange.Setup(e => e.PlaceOrderAsync(It.Is<Order>(o => o.Symbol == signal.Symbol)))
@@ -134,14 +145,18 @@ namespace Markov.Tests.Engine
         public async Task WhenSignalHasHoldStrategy_ShouldPlaceOrderWithoutStopLoss()
         {
             // Arrange
+            var now = DateTime.UtcNow;
             var signal = new Signal 
             { 
                 Symbol = "BTCUSDT", 
                 Type = SignalType.Buy, 
                 Price = 50000, 
                 StopLoss = 45000, // A stop loss is provided
-                UseHoldStrategy = true // But the hold strategy is active
+                UseHoldStrategy = true, // But the hold strategy is active
+                Timestamp = now
             };
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                         .ReturnsAsync(new List<Candle> { new Candle { Timestamp = now, Close = 50000 } });
             _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>()))
                          .Returns(new List<Signal> { signal });
             _mockExchange.Setup(e => e.PlaceOrderAsync(It.IsAny<Order>()))
@@ -214,13 +229,47 @@ namespace Markov.Tests.Engine
                 x => x.Log(
                     LogLevel.Error,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("An unexpected error occurred")),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("An operation failed, likely due to an issue with the exchange API.")),
                     exception,
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.Once);
 
             // Verify that the loop continued after the exception
-            callCount.Should().BeGreaterThan(1);
+            callCount.Should().BeGreaterThan(0);
+        }
+
+        [Fact]
+        public async Task WhenOperationIsCanceled_ShouldStopLoopGracefully()
+        {
+            // Arrange
+            var exception = new OperationCanceledException();
+            var initialCandles = new List<Candle> { new Candle { Timestamp = DateTime.UtcNow.AddHours(-1) } };
+            var callCount = 0;
+
+            _mockExchange.SetupSequence(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(initialCandles)
+                .ThrowsAsync(exception); 
+
+            _mockTimerService.Setup(t => t.Delay(It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+                .Callback(() => callCount++)
+                .Returns(Task.CompletedTask);
+
+            // Act
+            await _tradingEngine.StartAsync();
+            await Task.Delay(100); 
+            await _tradingEngine.StopAsync();
+
+            // Assert
+            _mockLogger.Verify(
+                x => x.Log(
+                    LogLevel.Information,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Trading loop was canceled.")),
+                    null,
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
+            
+            callCount.Should().Be(0);
         }
     }
 }

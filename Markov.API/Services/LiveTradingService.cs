@@ -51,7 +51,7 @@ public class LiveTradingService : ILiveTradingService
             tf, 
             _timerService, 
             _logger, 
-            TimeSpan.FromSeconds(_tradingSettings.TradingLoopIntervalSeconds)
+            _tradingSettings
         );
 
         var session = new Markov.Services.Models.LiveSession
@@ -159,7 +159,7 @@ public class LiveTradingService : ILiveTradingService
             tf, 
             _timerService, 
             _logger,
-            TimeSpan.FromSeconds(_tradingSettings.TradingLoopIntervalSeconds)
+            _tradingSettings
             );
         _runningEngines[sessionId] = engine;
         engine.StartAsync();

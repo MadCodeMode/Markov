@@ -66,6 +66,35 @@ namespace Markov.Services.Exchanges
             throw new NotImplementedException();
         }
 
+        public async Task<AccountBalance> GetBalanceAsync(string asset, CancellationToken cancellationToken)
+        {
+            var result = await _client.SpotApi.Account.GetAccountInfoAsync(ct: cancellationToken);
+
+            if (!result.Success)
+            {
+                throw new InvalidOperationException($"Failed to fetch account balance from Binance: {result.Error?.Message ?? "Unknown error"}");
+            }
+
+            var balance = result.Data.Balances.FirstOrDefault(b => b.Asset.Equals(asset, StringComparison.OrdinalIgnoreCase));
+
+            if (balance == null)
+            {
+                return new AccountBalance
+                {
+                    Asset = asset,
+                    Free = 0,
+                    Locked = 0
+                };
+            }
+
+            return new AccountBalance
+            {
+                Asset = balance.Asset,
+                Free = balance.Available,
+                Locked = balance.Locked
+            };
+        }
+
         private static KlineInterval ConvertTimeFrameToKlineInterval(TimeFrame timeFrame)
         {
             return timeFrame switch

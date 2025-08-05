@@ -9,4 +9,5 @@ public interface IExchange
     Task<Order> PlaceOrderAsync(Order order);
     Task<Order> GetOrderAsync(string orderId);
     Task CancelOrderAsync(string orderId);
+    Task<AccountBalance> GetBalanceAsync(string asset, CancellationToken cancellationToken);
 }

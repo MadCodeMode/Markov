@@ -30,4 +30,14 @@ public class DummyExchange : IExchange
         }
         return Task.FromResult(candles.AsEnumerable());
     }
+
+    public Task<AccountBalance> GetBalanceAsync(string asset, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(new AccountBalance
+        {
+            Asset = asset,
+            Free = 10000,
+            Locked = 0
+        });
+    }
 }

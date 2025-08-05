@@ -61,6 +61,11 @@ public class CachingExchange : IExchange
         return _exchange.CancelOrderAsync(orderId);
     }
 
+    public Task<AccountBalance> GetBalanceAsync(string asset, CancellationToken cancellationToken)
+    {
+        return _exchange.GetBalanceAsync(asset, cancellationToken);
+    }
+
     private string GetCacheFileName(string symbol, TimeFrame timeFrame, DateTime from, DateTime to)
     {
         return $"{symbol}_{timeFrame}_{from:yyyyMMdd}_{to:yyyyMMdd}.json";

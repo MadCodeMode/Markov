@@ -11,3 +11,11 @@ public class Asset
     public required string Source { get; set; }
     public required List<Candle> HistoricalData { get; set; }
 }
+
+public class AccountBalance
+{
+    public required string Asset { get; set; }
+    public decimal Free { get; set; }
+    public decimal Locked { get; set; }
+    public decimal Total => Free + Locked;
+}
