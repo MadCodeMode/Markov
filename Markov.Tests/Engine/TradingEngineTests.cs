@@ -271,7 +271,7 @@ namespace Markov.Tests.Engine
             
             callCount.Should().Be(0);
         }
-    [Fact]
+            [Fact]
         public async Task WhenHistoricalDataIsPresent_ShouldOnlyProcessRecentSignals()
         {
             // Arrange
@@ -303,5 +303,55 @@ namespace Markov.Tests.Engine
             _mockExchange.Verify(e => e.PlaceOrderAsync(It.Is<Order>(o => o.Price == recentSignal.Price)), Times.Once());
             _mockExchange.Verify(e => e.PlaceOrderAsync(It.Is<Order>(o => o.Price == historicalSignal.Price)), Times.Never());
         }
+
+        [Fact]
+        public async Task WithFixedAmountSizeMode_ShouldSetOrderQuantityToFixedSize()
+        {
+            // Arrange
+            var now = DateTime.UtcNow;
+            var signal = new Signal { Symbol = "BTCUSDT", Type = SignalType.Buy, Price = 50000, Timestamp = now };
+            var tradingSettings = new TradingSettings { SizeMode = TradeSizeMode.FixedAmount, Size = 0.5m, TradingLoopIntervalSeconds = 1 };
+            var engine = new TradingEngine(_mockExchange.Object, _mockStrategy.Object, _symbols, TimeFrame.OneMinute, _mockTimerService.Object, _mockLogger.Object, tradingSettings);
+
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                         .ReturnsAsync(new List<Candle> { new Candle { Timestamp = now, Close = 50000 } });
+            _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>()))
+                         .Returns(new List<Signal> { signal });
+            _mockExchange.Setup(e => e.PlaceOrderAsync(It.IsAny<Order>())).ReturnsAsync(new Order());
+
+            // Act
+            await engine.StartAsync();
+            await Task.Delay(100);
+            await engine.StopAsync();
+
+            // Assert
+            _mockExchange.Verify(e => e.PlaceOrderAsync(It.Is<Order>(o => o.Quantity == 0.5m)), Times.Once());
+        }
+
+        [Fact]
+        public async Task WithPercentageOfCapitalSizeMode_ShouldCalculateOrderQuantity()
+        {
+            // Arrange
+            var now = DateTime.UtcNow;
+            var signal = new Signal { Symbol = "BTCUSDT", Type = SignalType.Buy, Price = 50000, Timestamp = now };
+            // 10% of 10,000 USDT capital = 1,000 USDT. At a price of 50,000, quantity should be 1000 / 50000 = 0.02
+            var tradingSettings = new TradingSettings { SizeMode = TradeSizeMode.PercentageOfCapital, Size = 10, TradingLoopIntervalSeconds = 1 };
+            var engine = new TradingEngine(_mockExchange.Object, _mockStrategy.Object, _symbols, TimeFrame.OneMinute, _mockTimerService.Object, _mockLogger.Object, tradingSettings);
+
+            _mockExchange.Setup(e => e.GetHistoricalDataAsync(It.IsAny<string>(), It.IsAny<TimeFrame>(), It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+                         .ReturnsAsync(new List<Candle> { new Candle { Timestamp = now, Close = 50000 } });
+            _mockStrategy.Setup(s => s.GetFilteredSignals(It.IsAny<IDictionary<string, IEnumerable<Candle>>>()))
+                         .Returns(new List<Signal> { signal });
+            _mockExchange.Setup(e => e.PlaceOrderAsync(It.IsAny<Order>())).ReturnsAsync(new Order());
+
+            // Act
+            await engine.StartAsync();
+            await Task.Delay(100);
+            await engine.StopAsync();
+
+            // Assert
+            _mockExchange.Verify(e => e.PlaceOrderAsync(It.Is<Order>(o => o.Quantity == 0.02m)), Times.Once());
+        }
     }
 }
+

@@ -1,7 +1,8 @@
-namespace Markov.Services.Enums;
-
-public enum TradeSizeMode
+namespace Markov.Services.Enums
 {
-    FixedAmount,
-    PercentageOfCapital
+    public enum TradeSizeMode
+    {
+        FixedAmount,
+        PercentageOfCapital
+    }
 }

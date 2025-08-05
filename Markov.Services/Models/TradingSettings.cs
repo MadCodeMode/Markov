@@ -1,10 +1,9 @@
-using Markov.Services.Enums;
-
-namespace Markov.Services.Models;
-
-public class TradingSettings
+namespace Markov.Services.Models
 {
-    public int TradingLoopIntervalSeconds { get; set; } = 10;
-    public TradeSizeMode SizeMode { get; set; } = TradeSizeMode.FixedAmount;
-    public decimal Size { get; set; } = 1;
+    public class TradingSettings
+    {
+        public Enums.TradeSizeMode SizeMode { get; set; }
+        public decimal Size { get; set; } // Represents a fixed amount or a percentage
+        public int TradingLoopIntervalSeconds { get; set; } = 60;
+    }
 }
